@@ -1,0 +1,3 @@
+echo "paho-mqtt" > requirements.txt
+echo "psycopg2-binary" >> requirements.txt
+pip install -r requirements.txt

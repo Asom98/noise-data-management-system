@@ -10,12 +10,12 @@ MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 TOPIC = "city/malmo/noise"
 
-# Database connection settings (matching your .env and docker setup)
+# Database connection settings
 DB_HOST = "localhost"
 DB_PORT = "5432"
 DB_NAME = "noise_db"
 DB_USER = "noise_user"
-DB_PASS = "noise_password" # Change this if your .env password is different!
+DB_PASS = "noise_password"
 
 # --- Database Setup ---
 try:
@@ -63,7 +63,7 @@ def on_message(client, userdata, msg):
         unit = payload.get("unit", "dB")
         quality_flag = payload.get("quality_flag", 1) # Default to 1 (valid) if missing
         
-        # 3. Range check validation (e.g., sound can't be negative) [cite: 228]
+        # 3. Range check validation
         if value_db < 0 or value_db > 150:
             quality_flag = 2 # Suspect/Out of bounds
             print(f"Quality Flag applied: Out of bounds value {value_db} from {sensor_id}")

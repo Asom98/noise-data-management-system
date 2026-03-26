@@ -3,6 +3,7 @@ import requests
 import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
+import time
 
 # Load secure credentials
 load_dotenv()
@@ -12,11 +13,11 @@ PASSWORD = os.getenv("YGGIO_PASSWORD")
 # Database connection
 def get_db_connection():
     return psycopg2.connect(
-        host="localhost",
-        port="5432",
-        dbname="noise_db",
-        user="noise_user",
-        password="noise_password" # Change if your .env is different!
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT"),
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD")
     )
 
 def fetch_live_data():
@@ -43,8 +44,30 @@ def fetch_live_data():
         return nodes_resp.json()
     return None
 
+def extract_noise_value(values_dict):
+    """
+    Dynamically searches a JSON dictionary for noise-related values.
+    This makes the script infinitely scalable for any future sensor models!
+    """
+    target_keywords = ['sound', 'soundlaeq', 'soundlevel', 'noise']
+    
+    for key, val in values_dict.items():
+        key_lower = key.lower()
+        
+        # If the value is a nested dictionary (like DN0008), search inside it recursively
+        if isinstance(val, dict):
+            nested_result = extract_noise_value(val)
+            if nested_result is not None:
+                return nested_result
+                
+        # If the key contains our keywords and the value is a number, we found it!
+        elif any(keyword in key_lower for keyword in target_keywords) and isinstance(val, (int, float)):
+            return float(val)
+            
+    return None
+
 def ingest_to_timescale(nodes):
-    """Parses the messy API data, registers new sensors, and inserts data"""
+    """Parses API data, registers ANY new sensors, and inserts data"""
     conn = get_db_connection()
     conn.autocommit = True
     cursor = conn.cursor()
@@ -56,37 +79,38 @@ def ingest_to_timescale(nodes):
         reported_at = node.get("reportedAt")
         values = node.get("values", {})
         
-        # 1. SMART FIX: Automatically register the sensor if it doesn't exist!
+        # 1. Automatically register ANY sensor it finds
         try:
             cursor.execute("""
                 INSERT INTO sensors (sensor_id, description) 
                 VALUES (%s, %s) 
                 ON CONFLICT (sensor_id) DO NOTHING;
-            """, (node_id, f"Real Malmö Yggio Sensor"))
+            """, (node_id, "Real Malmö Yggio Sensor"))
         except Exception as e:
             print(f"Failed to register sensor {node_id}: {e}")
-            continue # Skip to the next node if we can't register this one
+            continue
             
-        # 2. Extract the noisy data
-        noise_value = None
-        if "DN0007" in node_id:
-            noise_value = values.get("691b344909e3eb66b5d4c5c9_sound")
-        elif "DN0008" in node_id:
-            output_obj = values.get("683d58e23bed6ef9a8a1c813_output", {})
-            noise_value = output_obj.get("soundLevel")
-        elif "DN0009" in node_id:
-            noise_value = values.get("68b7ebba2470f5eb98a3f19a_soundLaeq")
+        # 2. THE SCALABLE FIX: Dynamically extract the noise value without hardcoded IDs!
+        noise_value = extract_noise_value(values)
             
         # 3. Save to the database
         if noise_value is not None and reported_at is not None:
             try:
+                # ADDED: ON CONFLICT (sensor_id, ts) DO NOTHING
                 insert_query = """
                     INSERT INTO noise_measurements (ts, sensor_id, value_db, unit, quality_flag)
                     VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (sensor_id, ts) DO NOTHING; 
                 """
                 cursor.execute(insert_query, (reported_at, node_id, noise_value, 'dB', 1))
-                print(f"✅ Ingested to DB: {node_id} -> {noise_value} dB at {reported_at}")
-                success_count += 1
+                
+                # Check if a row was actually inserted, or if it was ignored as a duplicate!
+                if cursor.rowcount > 0:
+                    print(f"✅ NEW DATA: {node_id} -> {noise_value} dB at {reported_at}")
+                    success_count += 1
+                else:
+                    print(f"⏩ Skipped duplicate: {node_id} at {reported_at}")
+                    
             except Exception as e:
                 print(f"❌ DB Insert Error for {node_id}: {e}")
                 
@@ -95,6 +119,16 @@ def ingest_to_timescale(nodes):
     print(f"\nFinished ingestion cycle. Successfully saved {success_count} real records to TimescaleDB!")
 
 if __name__ == "__main__":
-    live_nodes = fetch_live_data()
-    if live_nodes:
-        ingest_to_timescale(live_nodes)
+    print("Starting Yggio API Continuous Ingestion Service...")
+    
+    # Run forever!
+    while True:
+        try:
+            live_nodes = fetch_live_data()
+            if live_nodes:
+                ingest_to_timescale(live_nodes)
+        except Exception as e:
+            print(f"Critical error in main loop: {e}")
+            
+        print("Sleeping for 60 seconds before the next poll...\n")
+        time.sleep(60) 

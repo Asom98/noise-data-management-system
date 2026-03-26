@@ -9,7 +9,7 @@ SELECT
     MIN(value_db) as min_noise_db,
     COUNT(*) as reading_count
 FROM noise_measurements
-WHERE quality_flag = 1 -- Only include valid data in summaries!
+WHERE quality_flag = 
 GROUP BY bucket, sensor_id;
 
 -- Set the refresh policy so it updates automatically in the background

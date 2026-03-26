@@ -2,16 +2,17 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 import plotly.express as px
+import os
 
 # --- Database Connection ---
 @st.cache_resource
 def init_connection():
     return psycopg2.connect(
-        host="localhost",
-        port="5432",
-        dbname="noise_db",
-        user="noise_user",
-        password="noise_password" # Ensure this matches your .env
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT"),
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD")
     )
 
 conn = init_connection()

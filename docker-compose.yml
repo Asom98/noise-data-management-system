@@ -25,6 +25,15 @@ services:
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
 
+  yggio_ingester:
+    build: ./services/yggio_api      
+    container_name: yggio_ingester
+    restart: unless-stopped          
+    env_file:
+      - ./services/yggio_api/.env    
+    depends_on:
+      - timescaledb                  
+
 volumes:
   timescale_data:
   mosquitto_data:

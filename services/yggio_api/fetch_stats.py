@@ -5,7 +5,6 @@ from yggio_auth import get_yggio_token
 NODE_CONFIGS = {
     "69a6f8d609e3eb66b537dbfe": {
         "name": "DN0007-Spångatan",
-        # Let's try the OTHER key from the JSON, using dot-notation for nested values!
         "measurement": "68c40a532470f5eb989e6e91_output.soundLevel"
     },
     "69a7e07109e3eb66b5555a43": {

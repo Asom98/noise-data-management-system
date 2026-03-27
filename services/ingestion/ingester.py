@@ -10,21 +10,14 @@ MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 TOPIC = "city/malmo/noise"
 
-# Database connection settings
-DB_HOST = "localhost"
-DB_PORT = "5432"
-DB_NAME = "noise_db"
-DB_USER = "noise_user"
-DB_PASS = "noise_password"
-
 # --- Database Setup ---
 try:
     conn = psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASS
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT"),
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD")
     )
     conn.autocommit = True
     cursor = conn.cursor()

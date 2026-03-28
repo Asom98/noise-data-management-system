@@ -1,0 +1,102 @@
+[
+    {
+        "_id": "69a6f8d609e3eb66b537dbfe",
+        "name": "DN0007-Buller Sp\u00e5ngatan x Bergsgatan",
+        "reportedAt": "2026-03-27T20:31:40.261Z",
+        "photos": [],
+        "secret": "spangatanxbergsgatan",
+        "synchronizedAt": "2026-03-03T15:05:58.927Z",
+        "values": {
+            "68c40a532470f5eb989e6e91_output": {
+                "soundAvgMinutes": 15,
+                "soundMinLevel": 45,
+                "soundLevel": 85.5
+            },
+            "691b344909e3eb66b5d4c5c9_sound": 60.4
+        },
+        "contextMap": {
+            "Projekt": "Buller"
+        }
+    },
+    {
+        "_id": "69a6fa4709e3eb66b5380c3f",
+        "reportedAt": "2026-03-27T20:30:47.361Z",
+        "values": {
+            "683d58e23bed6ef9a8a1c813_output": {
+                "soundAvgMinutes": 1,
+                "soundMinLevel": 45,
+                "soundLevel": 52.5
+            }
+        },
+        "secret": "vastravarvsgatan",
+        "synchronizedAt": "2026-03-03T15:12:07.717Z",
+        "name": "DN0008-Buller V\u00e4stravarvsgatan",
+        "photos": [],
+        "contextMap": {
+            "Projekt": "Buller"
+        }
+    },
+    {
+        "_id": "69a7e07109e3eb66b5555a43",
+        "name": "DN0009-Buller Bergsgatan 17",
+        "reportedAt": "2026-03-16T13:36:56.733Z",
+        "photos": [],
+        "secret": "bergsgatan17",
+        "contextMap": {
+            "Projekt": "Buller"
+        },
+        "synchronizedAt": "2026-03-04T07:34:09.037Z",
+        "values": {
+            "68b7ebba2470f5eb98a3f19a_soundLamax": 79.6,
+            "68b7ebba2470f5eb98a3f19a_soundLaeq": 70.8,
+            "68b7ebba2470f5eb98a3f19a_soundLamin": 52.6,
+            "68b7ebba2470f5eb98a3f19a_soundP1": 78.8,
+            "68b7ebba2470f5eb98a3f19a_soundP10": 75.3,
+            "68b7ebba2470f5eb98a3f19a_soundP50": 66.9,
+            "68b7ebba2470f5eb98a3f19a_soundP90": 58.3,
+            "68b7ebba2470f5eb98a3f19a_soundP99": 53,
+            "683d58b23bed6ef9a8a1c1db_output": {
+                "soundAvgMinutes": 1,
+                "soundMinLevel": 45,
+                "soundLevel": 66
+            }
+        }
+    },
+    {
+        "_id": "69b7ac67560a501a7493a304",
+        "reportedAt": "2026-03-27T20:23:44.367Z",
+        "values": {
+            "686e0ba52470f5eb98148e0b_output": {
+                "soundLevel": 66.60000000000001
+            }
+        },
+        "secret": "foreningsgatanxdisponentgatan",
+        "synchronizedAt": "2026-03-16T07:08:23.069Z",
+        "name": "DN0010-Buller F\u00f6reningsgatan x Disponentgatan",
+        "photos": [],
+        "contextMap": {
+            "Projekt": "Buller"
+        }
+    },
+    {
+        "_id": "69b7ad4a560a501a7493c06d",
+        "name": "DN0011-Buller Fersens v. x E. Dahlbergsg.",
+        "reportedAt": "2026-03-27T20:16:47.532Z",
+        "photos": [],
+        "secret": "fersensvagxdahlbergsgatan",
+        "synchronizedAt": "2026-03-16T07:12:10.523Z",
+        "contextMap": {
+            "Projekt": "Buller"
+        },
+        "values": {
+            "68b7ebba2470f5eb98a3f19a_soundLamax": 85.3,
+            "68b7ebba2470f5eb98a3f19a_soundLaeq": 71.1,
+            "68b7ebba2470f5eb98a3f19a_soundLamin": 51.9,
+            "68b7ebba2470f5eb98a3f19a_soundP1": 82.3,
+            "68b7ebba2470f5eb98a3f19a_soundP10": 74.8,
+            "68b7ebba2470f5eb98a3f19a_soundP50": 66.4,
+            "68b7ebba2470f5eb98a3f19a_soundP90": 57.7,
+            "68b7ebba2470f5eb98a3f19a_soundP99": 52.2
+        }
+    }
+]

@@ -32,7 +32,9 @@ services:
     env_file:
       - ./services/yggio_api/.env    
     depends_on:
-      - timescaledb                  
+      - timescaledb
+    volumes:
+      - ./services/yggio_api:/app
 
 volumes:
   timescale_data:

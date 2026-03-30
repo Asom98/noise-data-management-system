@@ -36,6 +36,19 @@ services:
     volumes:
       - ./services/yggio_api:/app
 
+  frontend_api:
+    build: ./services/frontend_api
+    container_name: frontend_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      - timescaledb
+    env_file:
+      - ./services/yggio_api/.env
+    volumes:
+      - ./services/frontend_api:/app
+
 volumes:
   timescale_data:
   mosquitto_data:

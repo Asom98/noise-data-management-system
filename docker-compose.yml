@@ -49,6 +49,15 @@ services:
     volumes:
       - ./services/frontend_api:/app
 
+  frontend:
+    build: ./services/frontend
+    container_name: frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - frontend_api
+    restart: always
+
 volumes:
   timescale_data:
   mosquitto_data:

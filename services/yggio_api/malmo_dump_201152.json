@@ -2,7 +2,7 @@
     {
         "_id": "69a6f8d609e3eb66b537dbfe",
         "name": "DN0007-Buller Sp\u00e5ngatan x Bergsgatan",
-        "reportedAt": "2026-03-30T19:53:11.055Z",
+        "reportedAt": "2026-03-30T20:11:11.167Z",
         "photos": [],
         "secret": "spangatanxbergsgatan",
         "synchronizedAt": "2026-03-03T15:05:58.927Z",
@@ -12,7 +12,7 @@
                 "soundMinLevel": 45,
                 "soundLevel": 67.5
             },
-            "691b344909e3eb66b5d4c5c9_sound": 58.2
+            "691b344909e3eb66b5d4c5c9_sound": 65.4
         },
         "contextMap": {
             "Projekt": "Buller"
@@ -20,12 +20,12 @@
     },
     {
         "_id": "69a6fa4709e3eb66b5380c3f",
-        "reportedAt": "2026-03-30T19:52:52.881Z",
+        "reportedAt": "2026-03-30T20:10:52.740Z",
         "values": {
             "683d58e23bed6ef9a8a1c813_output": {
                 "soundAvgMinutes": 1,
                 "soundMinLevel": 45,
-                "soundLevel": 69
+                "soundLevel": 55.5
             }
         },
         "secret": "vastravarvsgatan",
@@ -64,10 +64,10 @@
     },
     {
         "_id": "69b7ac67560a501a7493a304",
-        "reportedAt": "2026-03-30T19:53:49.613Z",
+        "reportedAt": "2026-03-30T20:08:50.282Z",
         "values": {
             "686e0ba52470f5eb98148e0b_output": {
-                "soundLevel": 64
+                "soundLevel": 66.4
             }
         },
         "secret": "foreningsgatanxdisponentgatan",

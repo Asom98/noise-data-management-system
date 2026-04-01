@@ -1,23 +1,49 @@
 import React from 'react';
-import SensorMap from './components/SensorMap';
-import CurrentNoiseChart from './components/CurrentNoiseChart';
-import HistoricalTrendChart from './components/HistoricalTrendChart'; // <-- Add this import
+import { HashRouter, Routes, Route } from 'react-router-dom';
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
+import Overview from './pages/Overview';
+import SensorMapPage from './pages/SensorMapPage';
+import LiveReadings from './pages/LiveReadings';
+import AlertsOutliers from './pages/AlertsOutliers';
+import SensorHealth from './pages/SensorHealth';
+import DataAnalysis from './pages/DataAnalysis';
+import Reports from './pages/Reports';
+import Settings from './pages/Settings';
 
-function App() {
+function Layout({ children }) {
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px', fontFamily: 'system-ui, sans-serif', backgroundColor: '#f9fafb', minHeight: '100vh' }}>
-      <header style={{ marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid #e5e7eb' }}>
-        <h1 style={{ margin: '0 0 8px 0', color: '#111827' }}>Malmö Noise Monitoring Dashboard</h1>
-        <p style={{ margin: 0, color: '#4b5563' }}>System Overview: Spatial and Quantitative Acoustic Analysis</p>
-      </header>
-      
-      <main>
-        <SensorMap />
-        <CurrentNoiseChart />
-        <HistoricalTrendChart /> {/* <-- Add the component here */}
-      </main>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
+      <Sidebar />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Header />
+        <main style={{
+          flex: 1,
+          backgroundColor: '#F3F4F6',
+          padding: '24px',
+          overflowY: 'auto',
+        }}>
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <HashRouter>
+      <Routes>
+        <Route path="/" element={<Layout><Overview /></Layout>} />
+        <Route path="/sensor-map" element={<Layout><SensorMapPage /></Layout>} />
+        <Route path="/live-readings" element={<Layout><LiveReadings /></Layout>} />
+        <Route path="/alerts" element={<Layout><AlertsOutliers /></Layout>} />
+        <Route path="/sensor-health" element={<Layout><SensorHealth /></Layout>} />
+        <Route path="/data-analysis" element={<Layout><DataAnalysis /></Layout>} />
+        <Route path="/reports" element={<Layout><Reports /></Layout>} />
+        <Route path="/settings" element={<Layout><Settings /></Layout>} />
+        <Route path="*" element={<Layout><Overview /></Layout>} />
+      </Routes>
+    </HashRouter>
+  );
+}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { loadSettings, saveSettings } from '../utils/noise';
 
 const SUB_NAV = [
   { id: 'notifications', label: 'Notifications' },
@@ -39,20 +40,11 @@ function Toggle({ checked, onChange }) {
 
 export default function Settings() {
   const [activeSection, setActiveSection] = useState('notifications');
-
-  // Notification preferences
-  const [criticalAlerts, setCriticalAlerts] = useState(true);
-  const [dailySummary, setDailySummary] = useState(true);
-  const [maintenanceReminders, setMaintenanceReminders] = useState(false);
-  const [weeklyReport, setWeeklyReport] = useState(true);
-
-  // Thresholds
-  const [highThreshold, setHighThreshold] = useState(70);
-  const [criticalThreshold, setCriticalThreshold] = useState(80);
-
+  const [settings, setSettings] = useState(() => loadSettings());
   const [saved, setSaved] = useState(false);
 
   function handleSave() {
+    saveSettings(settings);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -117,10 +109,10 @@ export default function Settings() {
                 </div>
                 <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '0' }}>
                   {[
-                    { label: 'Critical Alerts', desc: 'Immediate notification when sensors exceed critical threshold', value: criticalAlerts, setter: setCriticalAlerts },
-                    { label: 'Daily Summary', desc: 'Daily digest of noise levels and sensor status', value: dailySummary, setter: setDailySummary },
-                    { label: 'Weekly Report', desc: 'Weekly analysis report with trends and insights', value: weeklyReport, setter: setWeeklyReport },
-                    { label: 'Maintenance Reminders', desc: 'Alerts when sensors are due for maintenance checks', value: maintenanceReminders, setter: setMaintenanceReminders },
+                    { label: 'Critical Alerts', desc: 'Immediate notification when sensors exceed critical threshold', key: 'criticalAlerts' },
+                    { label: 'Daily Summary', desc: 'Daily digest of noise levels and sensor status', key: 'dailySummary' },
+                    { label: 'Weekly Report', desc: 'Weekly analysis report with trends and insights', key: 'weeklyReport' },
+                    { label: 'Maintenance Reminders', desc: 'Alerts when sensors are due for maintenance checks', key: 'maintenanceReminders' },
                   ].map((pref, idx, arr) => (
                     <div key={pref.label} style={{
                       display: 'flex',
@@ -133,7 +125,7 @@ export default function Settings() {
                         <div style={{ fontSize: '14px', fontWeight: '500', color: '#111827' }}>{pref.label}</div>
                         <div style={{ fontSize: '12px', color: '#6B7280', marginTop: '2px' }}>{pref.desc}</div>
                       </div>
-                      <Toggle checked={pref.value} onChange={pref.setter} />
+                      <Toggle checked={settings[pref.key]} onChange={(v) => setSettings((s) => ({ ...s, [pref.key]: v }))} />
                     </div>
                   ))}
                 </div>
@@ -155,8 +147,8 @@ export default function Settings() {
               </div>
               <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {[
-                  { label: 'High Noise Level', desc: 'Triggers a warning alert', value: highThreshold, setter: setHighThreshold, color: '#F97316' },
-                  { label: 'Critical Noise Level', desc: 'Triggers a critical alert', value: criticalThreshold, setter: setCriticalThreshold, color: '#EF4444' },
+                  { label: 'High Noise Level', desc: 'Triggers a warning alert', key: 'highThreshold', color: '#F97316' },
+                  { label: 'Critical Noise Level', desc: 'Triggers a critical alert', key: 'criticalThreshold', color: '#EF4444' },
                 ].map((t) => (
                   <div key={t.label}>
                     <label style={{ fontSize: '14px', fontWeight: '500', color: '#111827', display: 'block', marginBottom: '6px' }}>
@@ -166,8 +158,8 @@ export default function Settings() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <input
                         type="number"
-                        value={t.value}
-                        onChange={(e) => t.setter(Number(e.target.value))}
+                        value={settings[t.key]}
+                        onChange={(e) => setSettings((s) => ({ ...s, [t.key]: Number(e.target.value) }))}
                         min={40}
                         max={120}
                         style={{

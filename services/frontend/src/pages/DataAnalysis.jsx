@@ -4,7 +4,7 @@ import {
   LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, AreaChart, Area,
 } from 'recharts';
-import { API_BASE, SENSOR_COLORS } from '../utils/noise';
+import { API_BASE, SENSOR_COLORS, downloadCSV } from '../utils/noise';
 
 const TEMPLATES = [
   { id: 'timeseries', label: 'Daily Average by Location', type: 'Line Chart' },
@@ -35,10 +35,10 @@ function getBandCounts(data, sensorKeys) {
 
 export default function DataAnalysis() {
   const [history, setHistory] = useState([]);
-  const [sensorKeys, setSensorKeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTemplate, setActiveTemplate] = useState('timeseries');
   const [hours, setHours] = useState(1);
+  const [viewMode, setViewMode] = useState('avg');
 
   useEffect(() => {
     async function fetchData() {
@@ -47,9 +47,6 @@ export default function DataAnalysis() {
         const res = await axios.get(`${API_BASE}/api/measurements/history?hours=${hours}`);
         const data = res.data;
         setHistory(data);
-        if (data.length > 0) {
-          setSensorKeys(Object.keys(data[0]).filter((k) => k !== 'time'));
-        }
       } catch (e) {
         console.error('Data analysis fetch error:', e);
       } finally {
@@ -59,7 +56,12 @@ export default function DataAnalysis() {
     fetchData();
   }, [hours]);
 
-  const bandData = getBandCounts(history, sensorKeys);
+  // Re-derive sensorKeys when viewMode changes without re-fetching
+  const displayKeys = history.length > 0
+    ? Object.keys(history[0]).filter((k) => k.startsWith(viewMode === 'avg' ? 'avg__' : 'max__'))
+    : [];
+
+  const bandData = getBandCounts(history, displayKeys);
 
   function renderChart() {
     if (loading) {
@@ -89,10 +91,10 @@ export default function DataAnalysis() {
             <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
             <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#6B7280' }} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} unit=" dB" width={55} />
-            <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} formatter={(v, n) => [`${v} dB`, n]} />
-            <Legend wrapperStyle={{ fontSize: '12px' }} />
-            {sensorKeys.map((key, i) => (
-              <Area key={key} type="monotone" dataKey={key} stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]} fill={SENSOR_COLORS[i % SENSOR_COLORS.length] + '22'} dot={false} strokeWidth={2} connectNulls />
+            <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} formatter={(v, n) => [`${v} dB`, n.replace(/^avg__|^max__/, '')]} />
+            <Legend wrapperStyle={{ fontSize: '12px' }} formatter={(v) => v.replace(/^avg__|^max__/, '')} />
+            {displayKeys.map((key, i) => (
+              <Area key={key} type="monotone" dataKey={key} name={key.replace(/^avg__|^max__/, '')} stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]} fill={SENSOR_COLORS[i % SENSOR_COLORS.length] + '22'} dot={false} strokeWidth={2} connectNulls />
             ))}
           </AreaChart>
         </ResponsiveContainer>
@@ -102,7 +104,7 @@ export default function DataAnalysis() {
     if (activeTemplate === 'peak') {
       // Show average per time slot as bar chart
       const avgData = history.map((row) => {
-        const vals = sensorKeys.map((k) => row[k]).filter((v) => v != null);
+        const vals = displayKeys.map((k) => row[k]).filter((v) => v != null);
         const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
         return { time: row.time, avg: avg != null ? parseFloat(avg.toFixed(1)) : null };
       });
@@ -112,7 +114,7 @@ export default function DataAnalysis() {
             <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
             <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#6B7280' }} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} unit=" dB" width={55} />
-            <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} formatter={(v) => [`${v} dB`, 'Avg']} />
+            <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} formatter={(v) => [`${v} dB`, viewMode === 'avg' ? 'Avg' : 'Peak']} />
             <Bar dataKey="avg" fill="#2563EB" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -126,10 +128,10 @@ export default function DataAnalysis() {
           <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
           <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#6B7280' }} interval="preserveStartEnd" />
           <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} unit=" dB" width={55} />
-          <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} formatter={(v, n) => [`${v} dB`, n]} />
-          <Legend wrapperStyle={{ fontSize: '12px' }} />
-          {sensorKeys.map((key, i) => (
-            <Line key={key} type="monotone" dataKey={key} stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]} dot={false} strokeWidth={2} connectNulls />
+          <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} formatter={(v, n) => [`${v} dB`, n.replace(/^avg__|^max__/, '')]} />
+          <Legend wrapperStyle={{ fontSize: '12px' }} formatter={(v) => v.replace(/^avg__|^max__/, '')} />
+          {displayKeys.map((key, i) => (
+            <Line key={key} type="monotone" dataKey={key} name={key.replace(/^avg__|^max__/, '')} stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]} dot={false} strokeWidth={2} connectNulls />
           ))}
         </LineChart>
       </ResponsiveContainer>
@@ -145,24 +147,27 @@ export default function DataAnalysis() {
           <p style={{ fontSize: '14px', color: '#6B7280', marginTop: '4px' }}>Explore noise patterns and trends</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {[
-            { label: 'New Analysis', primary: true },
-            { label: 'Filters', primary: false },
-            { label: 'Export All', primary: false },
-          ].map((btn) => (
-            <button key={btn.label} style={{
-              padding: '8px 14px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: '500',
-              backgroundColor: btn.primary ? '#2563EB' : 'white',
-              color: btn.primary ? 'white' : '#374151',
-              border: btn.primary ? 'none' : '1px solid #E5E7EB',
-              cursor: 'pointer',
-            }}>
-              {btn.label}
-            </button>
-          ))}
+          <button style={{
+            padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '500',
+            backgroundColor: '#2563EB', color: 'white', border: 'none', cursor: 'pointer',
+          }}>
+            New Analysis
+          </button>
+          <button style={{
+            padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '500',
+            backgroundColor: 'white', color: '#374151', border: '1px solid #E5E7EB', cursor: 'pointer',
+          }}>
+            Filters
+          </button>
+          <button
+            onClick={() => downloadCSV('noise-analysis.csv', history)}
+            style={{
+              padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '500',
+              backgroundColor: 'white', color: '#374151', border: '1px solid #E5E7EB', cursor: 'pointer',
+            }}
+          >
+            Export All
+          </button>
         </div>
       </div>
 
@@ -250,18 +255,18 @@ export default function DataAnalysis() {
                 {TEMPLATES.find((t) => t.id === activeTemplate)?.label || 'Hourly Noise Analysis'}
               </h2>
               <div style={{ display: 'flex', gap: '6px' }}>
-                {['Average', 'Peak'].map((btn) => (
-                  <button key={btn} style={{
+                {[{ label: 'Average', mode: 'avg' }, { label: 'Peak', mode: 'peak' }].map((btn) => (
+                  <button key={btn.mode} onClick={() => setViewMode(btn.mode)} style={{
                     padding: '4px 10px',
                     borderRadius: '6px',
                     fontSize: '12px',
-                    fontWeight: btn === 'Average' ? '600' : '400',
-                    backgroundColor: btn === 'Average' ? '#EFF6FF' : 'white',
-                    color: btn === 'Average' ? '#2563EB' : '#6B7280',
+                    fontWeight: viewMode === btn.mode ? '600' : '400',
+                    backgroundColor: viewMode === btn.mode ? '#EFF6FF' : 'white',
+                    color: viewMode === btn.mode ? '#2563EB' : '#6B7280',
                     border: '1px solid #E5E7EB',
                     cursor: 'pointer',
                   }}>
-                    {btn}
+                    {btn.label}
                   </button>
                 ))}
               </div>

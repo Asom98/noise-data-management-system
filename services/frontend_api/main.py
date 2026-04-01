@@ -78,7 +78,8 @@ def get_historical_measurements(hours: int = Query(default=1, ge=1, le=168)):
             SELECT
                 time_bucket('{bucket}', ts) AS time_block,
                 sensor_id,
-                ROUND(AVG(value_db)::numeric, 1) as avg_db
+                ROUND(AVG(value_db)::numeric, 1) as avg_db,
+                ROUND(MAX(value_db)::numeric, 1) as max_db
             FROM noise_measurements
             WHERE ts >= NOW() - INTERVAL '{hours} HOURS'
             GROUP BY time_block, sensor_id
@@ -96,7 +97,8 @@ def get_historical_measurements(hours: int = Query(default=1, ge=1, le=168)):
             if time_str not in history_dict:
                 history_dict[time_str] = {"time": time_str}
 
-            history_dict[time_str][short_id] = float(row['avg_db'])
+            history_dict[time_str][f"avg__{short_id}"] = float(row['avg_db'])
+            history_dict[time_str][f"max__{short_id}"] = float(row['max_db'])
 
         return list(history_dict.values())
 
@@ -204,6 +206,43 @@ def get_alerts():
         return result
     except Exception as e:
         print(f"Error in /api/alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/reports/data")
+def get_report_data():
+    """Returns a full CSV-ready snapshot: all latest measurements joined with sensor descriptions."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT DISTINCT ON (m.sensor_id)
+                m.sensor_id,
+                s.description,
+                s.lat,
+                s.lon,
+                m.value_db,
+                m.ts,
+                m.quality_flag
+            FROM noise_measurements m
+            LEFT JOIN sensors s ON m.sensor_id = s.sensor_id
+            ORDER BY m.sensor_id, m.ts DESC;
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+        result = []
+        for row in rows:
+            result.append({
+                "sensor_id": row['sensor_id'],
+                "description": row['description'],
+                "lat": float(row['lat']) if row['lat'] is not None else None,
+                "lon": float(row['lon']) if row['lon'] is not None else None,
+                "value_db": float(row['value_db']) if row['value_db'] is not None else None,
+                "ts": row['ts'].isoformat() if row['ts'] is not None else None,
+                "quality_flag": row['quality_flag'],
+            })
+        return result
+    except Exception as e:
+        print(f"Error in /api/reports/data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/sensors/health")

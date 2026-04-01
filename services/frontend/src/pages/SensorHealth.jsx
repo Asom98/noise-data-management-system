@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { API_BASE, getSensorDisplayName } from '../utils/noise';
+import { API_BASE, getSensorDisplayName, downloadCSV } from '../utils/noise';
 
 function StatusBadge({ status }) {
   const map = {
@@ -83,19 +83,29 @@ export default function SensorHealth() {
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>Sensor Health</h1>
           <p style={{ fontSize: '14px', color: '#6B7280', marginTop: '4px' }}>Status overview for all registered sensors</p>
         </div>
-        <button style={{
-          padding: '8px 16px',
-          borderRadius: '8px',
-          fontSize: '13px',
-          fontWeight: '500',
-          backgroundColor: '#2563EB',
-          color: 'white',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}>
+        <button
+          onClick={() => downloadCSV('sensor-health.csv', sensors.map((s) => ({
+            sensor_id: s.sensor_id,
+            location: getSensorDisplayName(s.sensor_id, s.description),
+            battery_pct: s.battery_pct,
+            signal: s.signal,
+            status: s.status,
+            last_seen: s.last_seen,
+          })))}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: '500',
+            backgroundColor: '#2563EB',
+            color: 'white',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>

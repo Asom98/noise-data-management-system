@@ -4,7 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { API_BASE, SENSOR_COLORS, getNoiseColor } from '../utils/noise';
+import { API_BASE, SENSOR_COLORS, getNoiseColor, loadSettings, downloadCSV } from '../utils/noise';
 
 function KpiCard({ title, value, subtitle, borderHighlight, icon }) {
   return (
@@ -36,19 +36,22 @@ export default function Overview() {
   const [sensorKeys, setSensorKeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [hours, setHours] = useState(1);
+  const settings = loadSettings();
 
   useEffect(() => {
     async function fetchData() {
       try {
         const [statsRes, histRes] = await Promise.all([
           axios.get(`${API_BASE}/api/stats`),
-          axios.get(`${API_BASE}/api/measurements/history`),
+          axios.get(`${API_BASE}/api/measurements/history?hours=${hours}`),
         ]);
         setStats(statsRes.data);
         const data = histRes.data;
         setHistory(data);
         if (data.length > 0) {
-          const keys = Object.keys(data[0]).filter((k) => k !== 'time');
+          // Only show avg__ keys in the overview chart
+          const keys = Object.keys(data[0]).filter((k) => k.startsWith('avg__'));
           setSensorKeys(keys);
         }
       } catch (e) {
@@ -60,7 +63,7 @@ export default function Overview() {
     fetchData();
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [hours]);
 
   if (loading) {
     return (
@@ -138,21 +141,32 @@ export default function Overview() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
             <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>Noise Levels Overview</h2>
-            <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '2px' }}>Last 1 hour — 1 minute averages</p>
+            <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '2px' }}>
+              Last {hours === 1 ? '1 hour — 1 minute averages' : hours === 6 ? '6 hours — 1 hour averages' : '24 hours — 1 hour averages'}
+            </p>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button style={{
-              padding: '6px 14px', borderRadius: '6px', fontSize: '13px', fontWeight: '500',
-              backgroundColor: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE',
-            }}>Last 1h</button>
-            <button style={{
-              padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
-              backgroundColor: 'white', color: '#374151', border: '1px solid #E5E7EB',
-            }}>Filters</button>
-            <button style={{
-              padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
-              backgroundColor: 'white', color: '#374151', border: '1px solid #E5E7EB',
-            }}>Export</button>
+            {[{ label: 'Last 1h', value: 1 }, { label: 'Last 6h', value: 6 }, { label: 'Last 24h', value: 24 }].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setHours(opt.value)}
+                style={{
+                  padding: '6px 14px', borderRadius: '6px', fontSize: '13px', fontWeight: '500',
+                  backgroundColor: hours === opt.value ? '#EFF6FF' : 'white',
+                  color: hours === opt.value ? '#2563EB' : '#374151',
+                  border: hours === opt.value ? '1px solid #BFDBFE' : '1px solid #E5E7EB',
+                  cursor: 'pointer',
+                }}
+              >{opt.label}</button>
+            ))}
+            <button
+              onClick={() => downloadCSV('noise-overview.csv', history)}
+              style={{
+                padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
+                backgroundColor: 'white', color: '#374151', border: '1px solid #E5E7EB',
+                cursor: 'pointer',
+              }}
+            >Export</button>
           </div>
         </div>
 
@@ -171,12 +185,13 @@ export default function Overview() {
                 formatter={(v, name) => [`${v} dB`, name]}
               />
               <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <ReferenceLine y={70} stroke="#EF4444" strokeDasharray="5 5" label={{ value: '70 dB', fill: '#EF4444', fontSize: 11 }} />
+              <ReferenceLine y={settings.highThreshold} stroke="#EF4444" strokeDasharray="5 5" label={{ value: `${settings.highThreshold} dB`, fill: '#EF4444', fontSize: 11 }} />
               {sensorKeys.map((key, i) => (
                 <Line
                   key={key}
                   type="monotone"
                   dataKey={key}
+                  name={key.replace('avg__', '')}
                   stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]}
                   dot={false}
                   strokeWidth={2}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { API_BASE, getNoiseColor, getSensorDisplayName } from '../utils/noise';
+import { API_BASE, getNoiseColor, getSensorDisplayName, downloadCSV } from '../utils/noise';
 
 export default function AlertsOutliers() {
   const [alerts, setAlerts] = useState([]);
@@ -151,6 +151,27 @@ export default function AlertsOutliers() {
               }}
             >
               {lowOutliers.length} Low outliers
+            </button>
+            <button
+              onClick={() => downloadCSV('alerts.csv', filtered.map((a) => ({
+                sensor_id: a.sensor_id,
+                location: getSensorDisplayName(a.sensor_id, a.description),
+                value_db: a.value_db,
+                alert_type: a.alert_type,
+                timestamp: a.ts,
+              })))}
+              style={{
+                padding: '4px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                backgroundColor: 'white',
+                color: '#374151',
+                border: '1px solid #E5E7EB',
+              }}
+            >
+              Export CSV
             </button>
           </div>
         </div>

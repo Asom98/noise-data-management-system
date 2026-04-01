@@ -1,4 +1,6 @@
 import React from 'react';
+import axios from 'axios';
+import { API_BASE, downloadCSV } from '../utils/noise';
 
 const SCHEDULED = [
   { name: 'Daily Noise Summary', freq: 'Every day at 08:00', status: 'Active', next: 'Tomorrow 08:00' },
@@ -13,7 +15,7 @@ const RECENT = [
   { name: 'Daily Noise Summary', date: '28 Mar 2026', type: 'PDF', size: '1.1 MB' },
 ];
 
-function ActionCard({ icon, iconBg, title, desc, buttonLabel, buttonColor }) {
+function ActionCard({ icon, iconBg, title, desc, buttonLabel, buttonColor, onButtonClick }) {
   return (
     <div style={{
       backgroundColor: 'white',
@@ -42,7 +44,7 @@ function ActionCard({ icon, iconBg, title, desc, buttonLabel, buttonColor }) {
         <div style={{ fontSize: '15px', fontWeight: '600', color: '#111827' }}>{title}</div>
         <div style={{ fontSize: '13px', color: '#6B7280', marginTop: '4px' }}>{desc}</div>
       </div>
-      <button style={{
+      <button onClick={onButtonClick} style={{
         padding: '8px 20px',
         borderRadius: '8px',
         fontSize: '13px',
@@ -61,6 +63,11 @@ function ActionCard({ icon, iconBg, title, desc, buttonLabel, buttonColor }) {
 }
 
 export default function Reports() {
+  async function handleGenerateReport() {
+    const res = await axios.get(`${API_BASE}/api/reports/data`);
+    downloadCSV(`malmo-noise-report-${new Date().toISOString().slice(0, 10)}.csv`, res.data);
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Title */}
@@ -77,6 +84,7 @@ export default function Reports() {
           title="Generate Report"
           desc="Create a new report from current data"
           buttonLabel="Generate Now"
+          onButtonClick={handleGenerateReport}
           icon={
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2">
               <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -244,12 +252,12 @@ export default function Reports() {
                 </td>
                 <td style={{ padding: '12px 16px', color: '#6B7280' }}>{r.size}</td>
                 <td style={{ padding: '12px 16px' }}>
-                  <button style={{
+                  <button onClick={handleGenerateReport} style={{
                     padding: '4px 10px', borderRadius: '6px', fontSize: '12px',
                     backgroundColor: '#EFF6FF', color: '#2563EB',
                     border: '1px solid #BFDBFE', cursor: 'pointer',
                   }}>
-                    Download
+                    Download Latest
                   </button>
                 </td>
               </tr>

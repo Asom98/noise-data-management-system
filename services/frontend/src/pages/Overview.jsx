@@ -51,9 +51,12 @@ export default function Overview() {
         const data = histRes.data;
         setHistory(data);
         if (data.length > 0) {
-          // Only show avg__ keys in the overview chart
-          const keys = Object.keys(data[0]).filter((k) => k.startsWith('avg__'));
-          setSensorKeys(keys);
+          // Scan ALL buckets — not just the first — to collect every sensor key.
+          // A sensor may be absent from the first time bucket if it reported
+          // slightly later than others.
+          const keySet = new Set();
+          data.forEach((row) => Object.keys(row).forEach((k) => { if (k.startsWith('avg__')) keySet.add(k); }));
+          setSensorKeys([...keySet]);
         }
       } catch (e) {
         setError(e.message);

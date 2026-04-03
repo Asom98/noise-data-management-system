@@ -34,6 +34,7 @@ export default function Overview() {
   const [stats, setStats] = useState(null);
   const [history, setHistory] = useState([]);
   const [sensorKeys, setSensorKeys] = useState([]);
+  const [hiddenSensors, setHiddenSensors] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hours, setHours] = useState(1);
@@ -64,6 +65,17 @@ export default function Overview() {
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, [hours]);
+
+  function toggleSensor(key) {
+    setHiddenSensors((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  const visibleKeys = sensorKeys.filter((k) => !hiddenSensors.has(k));
 
   if (loading) {
     return (
@@ -138,14 +150,14 @@ export default function Overview() {
         boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
         border: '1px solid #E5E7EB',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>Noise Levels Overview</h2>
             <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '2px' }}>
               Last {hours === 1 ? '1 hour — 1 minute averages' : hours === 6 ? '6 hours — 1 hour averages' : '24 hours — 1 hour averages'}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             {[{ label: 'Last 1h', value: 1 }, { label: 'Last 6h', value: 6 }, { label: 'Last 24h', value: 24 }].map((opt) => (
               <button
                 key={opt.value}
@@ -170,6 +182,38 @@ export default function Overview() {
           </div>
         </div>
 
+        {/* Sensor toggle pills */}
+        {sensorKeys.length > 0 && (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+            {sensorKeys.map((key, i) => {
+              const label = key.replace('avg__', '');
+              const isHidden = hiddenSensors.has(key);
+              const color = SENSOR_COLORS[i % SENSOR_COLORS.length];
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggleSensor(key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '500',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                    backgroundColor: isHidden ? '#F3F4F6' : `${color}18`,
+                    color: isHidden ? '#9CA3AF' : color,
+                    border: `1px solid ${isHidden ? '#E5E7EB' : color}`,
+                  }}
+                >
+                  <span style={{
+                    width: '8px', height: '8px', borderRadius: '50%',
+                    backgroundColor: isHidden ? '#D1D5DB' : color,
+                    flexShrink: 0,
+                  }} />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {history.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#6B7280', padding: '60px 0', fontSize: '14px' }}>
             No historical data available
@@ -187,16 +231,18 @@ export default function Overview() {
               <Legend wrapperStyle={{ fontSize: '12px' }} />
               <ReferenceLine y={settings.highThreshold} stroke="#EF4444" strokeDasharray="5 5" label={{ value: `${settings.highThreshold} dB`, fill: '#EF4444', fontSize: 11 }} />
               {sensorKeys.map((key, i) => (
-                <Line
-                  key={key}
-                  type="monotone"
-                  dataKey={key}
-                  name={key.replace('avg__', '')}
-                  stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]}
-                  dot={false}
-                  strokeWidth={2}
-                  connectNulls
-                />
+                visibleKeys.includes(key) && (
+                  <Line
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    name={key.replace('avg__', '')}
+                    stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]}
+                    dot={false}
+                    strokeWidth={2}
+                    connectNulls
+                  />
+                )
               ))}
             </LineChart>
           </ResponsiveContainer>

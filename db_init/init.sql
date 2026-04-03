@@ -6,12 +6,19 @@ CREATE TABLE IF NOT EXISTS sensors (
     lon DOUBLE PRECISION
 );
 
--- Insert our simulated sensors so the foreign keys match
-INSERT INTO sensors (sensor_id, description) VALUES 
-    ('sensor-malmo-01', 'Central Station'),
-    ('sensor-malmo-02', 'Triangeln'),
-    ('sensor-malmo-03', 'Folkets Park')
-ON CONFLICT DO NOTHING;
+-- Real Malmö sensor GPS coordinates (WGS84) — seeded once at DB init.
+-- sensor_id matches the "name" field from the Yggio IoT platform.
+-- Description is the human-readable street location; updated on each ingestion cycle.
+INSERT INTO sensors (sensor_id, description, lat, lon) VALUES
+    ('DN0007-Buller Spångatan x Bergsgatan',         'Spångatan x Bergsgatan',              55.5962, 13.0087),
+    ('DN0008-Buller Västravarvsgatan',               'Västravarvsgatan',                    55.6119, 12.9774),
+    ('DN0009-Buller Bergsgatan 17',                  'Bergsgatan 17',                       55.5986, 13.0076),
+    ('DN0010-Buller Föreningsgatan x Disponentgatan','Föreningsgatan x Disponentgatan',     55.5965, 13.0163),
+    ('DN0011-Buller Fersens v. x E. Dahlbergsg.',   'Fersens v. x E. Dahlbergsg.',         55.5994, 12.9972)
+ON CONFLICT (sensor_id) DO UPDATE
+    SET lat = EXCLUDED.lat,
+        lon = EXCLUDED.lon,
+        description = EXCLUDED.description;
 
 -- Create the raw measurements table
 CREATE TABLE IF NOT EXISTS noise_measurements (

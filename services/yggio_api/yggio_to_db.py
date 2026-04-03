@@ -46,25 +46,50 @@ def fetch_live_data():
 
 def extract_noise_value(values_dict):
     """
-    Dynamically searches a JSON dictionary for noise-related values.
-    This makes the script infinitely scalable for any future sensor models!
+    Extracts the primary acoustic noise level (dB) from the Yggio sensor payload.
+
+    Priority order:
+      1. soundLaeq  — equivalent continuous noise level (acoustically correct standard)
+      2. soundLevel — instantaneous level (used by DN0007, DN0008, DN0010)
+
+    Explicitly excluded (NOT dB values):
+      - soundAvgMinutes  — averaging window in minutes (integer metadata, e.g. 1 or 15)
+      - soundMinLevel    — minimum threshold configuration, not a measurement
+      - soundLamin       — minimum level over window (secondary statistic, not primary)
+      - soundLamax       — maximum level over window (secondary statistic)
+      - soundP1/P10/P50/P90/P99 — percentile statistics, not the primary reading
+
+    This two-pass approach prevents the dict-iteration-order bug where
+    soundAvgMinutes (value=15 or 1) was returned before soundLevel for
+    sensors DN0007 and DN0008.
     """
-    target_keywords = ['sound', 'soundlaeq', 'soundlevel', 'noise']
-    
-    for key, val in values_dict.items():
-        key_lower = key.lower()
-        
-        # If the value is a nested dictionary (like DN0008), search inside it recursively
-        if isinstance(val, dict):
-            nested_result = extract_noise_value(val)
-            if nested_result is not None:
-                return nested_result
-                
-        # If the key contains our keywords and the value is a number, we found it!
-        elif any(keyword in key_lower for keyword in target_keywords) and isinstance(val, (int, float)):
-            return float(val)
-            
-    return None
+    EXCLUDED = {
+        'soundavgminutes', 'soundminlevel', 'soundlamin', 'soundlamax',
+        'soundp1', 'soundp10', 'soundp50', 'soundp90', 'soundp99',
+    }
+
+    def _flat_search(d, keyword):
+        """Single-pass search for one exact keyword substring, skipping excluded keys."""
+        for key, val in d.items():
+            key_lower = key.lower()
+            if isinstance(val, dict):
+                result = _flat_search(val, keyword)
+                if result is not None:
+                    return result
+            elif (keyword in key_lower
+                  and key_lower not in EXCLUDED
+                  and not any(ex in key_lower for ex in EXCLUDED)
+                  and isinstance(val, (int, float))):
+                return float(val)
+        return None
+
+    # Pass 1: prefer soundLaeq (acoustically correct equivalent-continuous level)
+    result = _flat_search(values_dict, 'soundlaeq')
+    if result is not None:
+        return result
+
+    # Pass 2: fall back to soundLevel (instantaneous reading)
+    return _flat_search(values_dict, 'soundlevel')
 
 def ingest_to_timescale(nodes):
     """Parses API data, registers ANY new sensors, and inserts data"""
@@ -78,14 +103,23 @@ def ingest_to_timescale(nodes):
         node_id = node.get("name", "Unknown Node")
         reported_at = node.get("reportedAt")
         values = node.get("values", {})
-        
+
+        # Extract human-readable location from the Yggio name field.
+        # Name format: "DN0007-Buller Spångatan x Bergsgatan"
+        # We store the location part after "Buller " as the description.
+        full_name = node_id  # node_id == the "name" field
+        if '-Buller ' in full_name:
+            location = full_name.split('-Buller ', 1)[1].strip()
+        else:
+            location = full_name
+
         # 1. Automatically register ANY sensor it finds
         try:
             cursor.execute("""
-                INSERT INTO sensors (sensor_id, description) 
-                VALUES (%s, %s) 
-                ON CONFLICT (sensor_id) DO NOTHING;
-            """, (node_id, "Real Malmö Yggio Sensor"))
+                INSERT INTO sensors (sensor_id, description)
+                VALUES (%s, %s)
+                ON CONFLICT (sensor_id) DO UPDATE SET description = EXCLUDED.description;
+            """, (node_id, location))
         except Exception as e:
             print(f"Failed to register sensor {node_id}: {e}")
             continue

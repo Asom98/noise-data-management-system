@@ -11,6 +11,23 @@ import DataAnalysis from './pages/DataAnalysis';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 
+function PlaceholderPage({ title, description }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div>
+        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{title}</h1>
+        <p style={{ fontSize: '14px', color: '#6B7280', marginTop: '4px' }}>{description}</p>
+      </div>
+      <div style={{
+        backgroundColor: 'white', borderRadius: '12px', padding: '48px 24px',
+        border: '1px solid #E5E7EB', textAlign: 'center', color: '#6B7280',
+      }}>
+        <p style={{ fontSize: '15px', margin: 0 }}>This section is not yet implemented.</p>
+      </div>
+    </div>
+  );
+}
+
 function Layout({ children }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
@@ -42,6 +59,8 @@ export default function App() {
         <Route path="/data-analysis" element={<Layout><DataAnalysis /></Layout>} />
         <Route path="/reports" element={<Layout><Reports /></Layout>} />
         <Route path="/settings" element={<Layout><Settings /></Layout>} />
+        <Route path="/notifications" element={<Layout><PlaceholderPage title="Notifications" description="Alert notifications and event history" /></Layout>} />
+        <Route path="/system" element={<Layout><PlaceholderPage title="System" description="System status and diagnostics" /></Layout>} />
         <Route path="*" element={<Layout><Overview /></Layout>} />
       </Routes>
     </HashRouter>

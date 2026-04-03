@@ -76,13 +76,15 @@ def get_historical_measurements(hours: int = Query(default=1, ge=1, le=168)):
 
         cursor.execute(f"""
             SELECT
-                time_bucket('{bucket}', ts) AS time_block,
-                sensor_id,
-                ROUND(AVG(value_db)::numeric, 1) as avg_db,
-                ROUND(MAX(value_db)::numeric, 1) as max_db
-            FROM noise_measurements
-            WHERE ts >= NOW() - INTERVAL '{hours} HOURS'
-            GROUP BY time_block, sensor_id
+                time_bucket('{bucket}', m.ts) AS time_block,
+                m.sensor_id,
+                s.description,
+                ROUND(AVG(m.value_db)::numeric, 1) as avg_db,
+                ROUND(MAX(m.value_db)::numeric, 1) as max_db
+            FROM noise_measurements m
+            LEFT JOIN sensors s ON m.sensor_id = s.sensor_id
+            WHERE m.ts >= NOW() - INTERVAL '{hours} HOURS'
+            GROUP BY time_block, m.sensor_id, s.description
             ORDER BY time_block ASC;
         """)
 
@@ -92,13 +94,15 @@ def get_historical_measurements(hours: int = Query(default=1, ge=1, le=168)):
         history_dict = {}
         for row in measurements:
             time_str = row['time_block'].strftime(time_format)
-            short_id = row['sensor_id'].replace('DN000', '').replace('-Buller ', '')[:15]
+            # Use human-readable location description as the chart series key.
+            # Fall back to sensor_id if description is missing.
+            label = (row['description'] or row['sensor_id'])[:25]
 
             if time_str not in history_dict:
                 history_dict[time_str] = {"time": time_str}
 
-            history_dict[time_str][f"avg__{short_id}"] = float(row['avg_db'])
-            history_dict[time_str][f"max__{short_id}"] = float(row['max_db'])
+            history_dict[time_str][f"avg__{label}"] = float(row['avg_db'])
+            history_dict[time_str][f"max__{label}"] = float(row['max_db'])
 
         return list(history_dict.values())
 

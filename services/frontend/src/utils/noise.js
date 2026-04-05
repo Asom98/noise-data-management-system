@@ -20,9 +20,9 @@ export function getNoiseLevel(db, thresholds) {
 export function getNoiseLevelLabel(db, thresholds) {
   const h = thresholds?.highThreshold ?? 70;
   const c = thresholds?.criticalThreshold ?? 80;
-  if (db >= c) return 'Critical';
-  if (db >= h) return 'High';
-  if (db >= h - 10) return 'Moderate';
+  if (db >= c) return 'Kritisk';
+  if (db >= h) return 'Hög';
+  if (db >= h - 10) return 'Måttlig';
   return 'Normal';
 }
 

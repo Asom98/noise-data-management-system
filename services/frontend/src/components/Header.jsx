@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function Header() {
+  const { t, lang, toggleLanguage } = useLanguage();
   const [query, setQuery] = useState('');
 
   return (
@@ -44,7 +46,7 @@ export default function Header() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Ask AI about sensor data, noise levels, or get insights..."
+          placeholder={t.header.searchPlaceholder}
           style={{
             flex: 1,
             border: 'none',
@@ -68,18 +70,46 @@ export default function Header() {
             flexShrink: 0,
           }}
         >
-          Ask
+          {t.header.ask}
         </button>
       </div>
 
-      {/* Right: Bell + User */}
+      {/* Right: Language toggle + Bell + User */}
       <div style={{
-        width: '120px',
+        width: '180px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'flex-end',
         gap: '16px',
       }}>
+        {/* Language toggle */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          border: '1px solid #E5E7EB',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          fontSize: '12px',
+          fontWeight: '600',
+        }}>
+          {['sv', 'en'].map((l) => (
+            <button
+              key={l}
+              onClick={() => lang !== l && toggleLanguage()}
+              style={{
+                padding: '5px 10px',
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: lang === l ? '#2563EB' : 'white',
+                color: lang === l ? 'white' : '#6B7280',
+                transition: 'background 0.15s, color 0.15s',
+              }}
+            >
+              {l.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
         {/* Bell with red dot */}
         <div style={{ position: 'relative', cursor: 'pointer' }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -102,7 +132,7 @@ export default function Header() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#111827', lineHeight: '1.2' }}>John Doe</div>
-            <div style={{ fontSize: '11px', color: '#6B7280', lineHeight: '1.2' }}>Admin</div>
+            <div style={{ fontSize: '11px', color: '#6B7280', lineHeight: '1.2' }}>{t.header.admin}</div>
           </div>
           <div style={{
             width: '32px',

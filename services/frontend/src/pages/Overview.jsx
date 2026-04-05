@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { API_BASE, SENSOR_COLORS, getNoiseColor, loadSettings, downloadCSV } from '../utils/noise';
+import { useLanguage } from '../context/LanguageContext';
 
 function KpiCard({ title, value, subtitle, borderHighlight, icon }) {
   return (
@@ -31,6 +32,7 @@ function KpiCard({ title, value, subtitle, borderHighlight, icon }) {
 }
 
 export default function Overview() {
+  const { t } = useLanguage();
   const [stats, setStats] = useState(null);
   const [history, setHistory] = useState([]);
   const [sensorKeys, setSensorKeys] = useState([]);
@@ -51,9 +53,6 @@ export default function Overview() {
         const data = histRes.data;
         setHistory(data);
         if (data.length > 0) {
-          // Scan ALL buckets — not just the first — to collect every sensor key.
-          // A sensor may be absent from the first time bucket if it reported
-          // slightly later than others.
           const keySet = new Set();
           data.forEach((row) => Object.keys(row).forEach((k) => { if (k.startsWith('avg__')) keySet.add(k); }));
           setSensorKeys([...keySet]);
@@ -83,7 +82,7 @@ export default function Overview() {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#6B7280' }}>
-        Loading dashboard data...
+        {t.overview.loading}
       </div>
     );
   }
@@ -91,7 +90,7 @@ export default function Overview() {
   if (error) {
     return (
       <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '16px', color: '#DC2626' }}>
-        Error loading data: {error}
+        {t.overview.errorLoading} {error}
       </div>
     );
   }
@@ -100,45 +99,41 @@ export default function Overview() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Page title */}
       <div>
-        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>Overview</h1>
-        <p style={{ fontSize: '14px', color: '#6B7280', marginTop: '4px' }}>System-wide noise monitoring summary</p>
+        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{t.overview.title}</h1>
+        <p style={{ fontSize: '14px', color: '#6B7280', marginTop: '4px' }}>{t.overview.subtitle}</p>
       </div>
 
       {/* KPI Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: '16px',
-      }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
         <KpiCard
-          title="Active Sensors"
+          title={t.overview.activeSensors}
           value={stats?.active_sensors ?? '—'}
-          subtitle="With GPS coordinates"
+          subtitle={t.overview.activeSensorsSubtitle}
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           }
         />
         <KpiCard
-          title="Avg. Noise Level"
+          title={t.overview.avgNoise}
           value={stats?.avg_noise_db != null ? `${stats.avg_noise_db} dB` : '—'}
-          subtitle="Current average across sensors"
+          subtitle={t.overview.avgNoiseSubtitle}
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           }
         />
         <KpiCard
-          title="Active Alerts"
+          title={t.overview.activeAlerts}
           value={stats?.active_alerts ?? '—'}
-          subtitle="Sensors above 70 dB"
+          subtitle={t.overview.activeAlertsSubtitle}
           borderHighlight={stats?.active_alerts > 0 ? '#F97316' : undefined}
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={stats?.active_alerts > 0 ? '#F97316' : 'currentColor'} strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           }
         />
         <KpiCard
-          title="Sensor Health"
+          title={t.overview.sensorHealth}
           value={stats?.sensor_health_pct != null ? `${stats.sensor_health_pct}%` : '—'}
-          subtitle="Active in last 2 hours"
+          subtitle={t.overview.sensorHealthSubtitle}
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
           }
@@ -155,13 +150,13 @@ export default function Overview() {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>Noise Levels Overview</h2>
+            <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>{t.overview.chartTitle}</h2>
             <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '2px' }}>
-              Last {hours === 1 ? '1 hour — 1 minute averages' : hours === 6 ? '6 hours — 1 hour averages' : '24 hours — 1 hour averages'}
+              {hours === 1 ? t.overview.range1h : hours === 6 ? t.overview.range6h : t.overview.range24h}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-            {[{ label: 'Last 1h', value: 1 }, { label: 'Last 6h', value: 6 }, { label: 'Last 24h', value: 24 }].map((opt) => (
+            {[{ label: t.overview.last1h, value: 1 }, { label: t.overview.last6h, value: 6 }, { label: t.overview.last24h, value: 24 }].map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => setHours(opt.value)}
@@ -181,7 +176,7 @@ export default function Overview() {
                 backgroundColor: 'white', color: '#374151', border: '1px solid #E5E7EB',
                 cursor: 'pointer',
               }}
-            >Export</button>
+            >{t.overview.export}</button>
           </div>
         </div>
 
@@ -219,7 +214,7 @@ export default function Overview() {
 
         {history.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#6B7280', padding: '60px 0', fontSize: '14px' }}>
-            No historical data available
+            {t.overview.noData}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>

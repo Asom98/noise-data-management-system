@@ -1,11 +1,150 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
+import uPlot from 'uplot';
+import 'uplot/dist/uPlot.min.css';
+import ReactECharts from 'echarts-for-react';
+import { Line as ChartJSLine } from 'react-chartjs-2';
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement,
+  LineElement, Tooltip as CJTooltip, Legend as CJLegend,
+} from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, CJTooltip, CJLegend, zoomPlugin);
 import { API_BASE, SENSOR_COLORS, getNoiseColor, loadSettings, downloadCSV } from '../utils/noise';
 import { useLanguage } from '../context/LanguageContext';
+
+// ── ECharts component ────────────────────────────────────────────────────────
+function EChartsChart({ history, sensorKeys, colors }) {
+  if (!history.length || !sensorKeys.length) return null;
+  const labels = history.map(r => r.time);
+  const series = sensorKeys.map((key, i) => ({
+    name: key.replace('avg__', ''),
+    type: 'line',
+    data: history.map(r => r[key] ?? null),
+    lineStyle: { color: colors[i % colors.length], width: 2 },
+    itemStyle: { color: colors[i % colors.length] },
+    symbol: 'none',
+    smooth: false,
+  }));
+  const option = {
+    tooltip: { trigger: 'axis' },
+    legend: { bottom: 0, textStyle: { fontSize: 11 } },
+    grid: { top: 10, right: 20, bottom: 60, left: 60 },
+    dataZoom: [
+      { type: 'inside', xAxisIndex: 0, filterMode: 'filter' },
+      { type: 'slider',  xAxisIndex: 0, bottom: 30, height: 20 },
+    ],
+    xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { formatter: v => `${v} dB`, fontSize: 11 } },
+    series,
+  };
+  return <ReactECharts option={option} style={{ height: 320 }} notMerge />;
+}
+
+// ── Chart.js component ───────────────────────────────────────────────────────
+function ChartJSChart({ history, sensorKeys, colors }) {
+  if (!history.length || !sensorKeys.length) return null;
+  const data = {
+    labels: history.map(r => r.time),
+    datasets: sensorKeys.map((key, i) => ({
+      label: key.replace('avg__', ''),
+      data: history.map(r => r[key] ?? null),
+      borderColor: colors[i % colors.length],
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0,
+    })),
+  };
+  const options = {
+    responsive: true,
+    animation: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 11 } } },
+      zoom: {
+        pan:  { enabled: true, mode: 'x' },
+        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+      },
+    },
+    scales: {
+      x: { ticks: { font: { size: 11 } } },
+      y: { ticks: { callback: v => `${v} dB`, font: { size: 11 } } },
+    },
+  };
+  return <ChartJSLine data={data} options={options} />;
+}
+
+// ── uPlot chart component ────────────────────────────────────────────────────
+function UPlotChart({ history, sensorKeys, colors, threshold }) {
+  const containerRef = useRef(null);
+  const plotRef      = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current || history.length === 0 || sensorKeys.length === 0) return;
+
+    // Build uPlot data: [timestamps, ...seriesValues]
+    const timestamps = history.map((row) => new Date(row.time).getTime() / 1000);
+
+    // timestamps might be NaN if "time" is "HH:MM" — convert differently
+    // uPlot needs Unix seconds. Parse "HH:MM" by using today's date
+    const today = new Date().toDateString();
+    const ts = history.map((row) => {
+      const d = new Date(`${today} ${row.time}`);
+      return isNaN(d.getTime()) ? 0 : d.getTime() / 1000;
+    });
+
+    const seriesData = sensorKeys.map((key) =>
+      history.map((row) => (row[key] != null ? row[key] : null))
+    );
+
+    const data = [ts, ...seriesData];
+
+    const series = [
+      { label: 'Time' },
+      ...sensorKeys.map((key, i) => ({
+        label: key.replace('avg__', ''),
+        stroke: colors[i % colors.length],
+        width: 2,
+      })),
+    ];
+
+    const opts = {
+      title: '',
+      width:  containerRef.current.clientWidth || 800,
+      height: 300,
+      cursor: { drag: { x: true, y: false } },
+      scales: { x: { time: true }, y: { auto: true } },
+      axes: [
+        { stroke: '#6B7280', ticks: { stroke: '#E5E7EB' }, grid: { stroke: '#F3F4F6' } },
+        { stroke: '#6B7280', ticks: { stroke: '#E5E7EB' }, grid: { stroke: '#F3F4F6' }, values: (u, vals) => vals.map(v => v != null ? `${v} dB` : '') },
+      ],
+      series,
+    };
+
+    // Destroy previous instance
+    if (plotRef.current) { plotRef.current.destroy(); }
+    plotRef.current = new uPlot(opts, data, containerRef.current);
+
+    return () => { if (plotRef.current) { plotRef.current.destroy(); plotRef.current = null; } };
+  }, [history, sensorKeys]);
+
+  // Resize on window resize
+  useEffect(() => {
+    function onResize() {
+      if (plotRef.current && containerRef.current) {
+        plotRef.current.setSize({ width: containerRef.current.clientWidth, height: 300 });
+      }
+    }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  return <div ref={containerRef} style={{ width: '100%' }} />;
+}
 
 function KpiCard({ title, value, subtitle, borderHighlight, icon }) {
   return (
@@ -67,6 +206,32 @@ export default function Overview() {
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, [hours]);
+
+  // ── ECharts independent data fetch ───────────────────────────────────────
+  const [echartsHours, setEchartsHours]     = useState(24);
+  const [echartsHistory, setEchartsHistory] = useState([]);
+  const [echartsKeys, setEchartsKeys]       = useState([]);
+  const [echartsLoading, setEchartsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchECharts() {
+      setEchartsLoading(true);
+      try {
+        const res  = await axios.get(`${API_BASE}/api/measurements/history?hours=${echartsHours}`);
+        const data = res.data;
+        setEchartsHistory(data);
+        if (data.length > 0) {
+          const keySet = new Set();
+          data.forEach((row) => Object.keys(row).forEach((k) => { if (k.startsWith('avg__')) keySet.add(k); }));
+          setEchartsKeys([...keySet]);
+        }
+      } catch (e) { /* silent */ }
+      finally { setEchartsLoading(false); }
+    }
+    fetchECharts();
+    const interval = setInterval(fetchECharts, 60000);
+    return () => clearInterval(interval);
+  }, [echartsHours]);
 
   function toggleSensor(key) {
     setHiddenSensors((prev) => {
@@ -245,6 +410,45 @@ export default function Overview() {
             </LineChart>
           </ResponsiveContainer>
         )}
+      </div>
+
+      {/* ── uPlot ── */}
+      <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '2px solid #BFDBFE' }}>
+        <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px' }}>uPlot</h2>
+        <p style={{ fontSize: '13px', color: '#2563EB', margin: '0 0 12px', fontWeight: '500' }}>Scroll to zoom · Click and drag to pan</p>
+        {history.length > 0 && sensorKeys.length > 0
+          ? <UPlotChart history={history} sensorKeys={sensorKeys.filter(k => k.startsWith('avg__'))} colors={SENSOR_COLORS} />
+          : <div style={{ textAlign: 'center', color: '#6B7280', padding: '60px 0' }}>No data</div>}
+      </div>
+
+      {/* ── ECharts ── */}
+      <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '2px solid #A7F3D0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 2px' }}>Apache ECharts</h2>
+            <p style={{ fontSize: '13px', color: '#059669', margin: 0, fontWeight: '500' }}>Scroll to zoom · Drag slider · Click legend to toggle</p>
+          </div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {[{ label: '1h', value: 1 }, { label: '6h', value: 6 }, { label: '24h', value: 24 }, { label: '3d', value: 72 }, { label: '7d', value: 168 }].map(opt => (
+              <button key={opt.value} onClick={() => setEchartsHours(opt.value)} style={{
+                padding: '5px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+                backgroundColor: echartsHours === opt.value ? '#ECFDF5' : 'white',
+                color: echartsHours === opt.value ? '#059669' : '#374151',
+                border: echartsHours === opt.value ? '1px solid #6EE7B7' : '1px solid #E5E7EB',
+              }}>{opt.label}</button>
+            ))}
+          </div>
+        </div>
+        {echartsLoading
+          ? <div style={{ textAlign: 'center', color: '#6B7280', padding: '60px 0' }}>Loading...</div>
+          : <EChartsChart history={echartsHistory} sensorKeys={echartsKeys.filter(k => k.startsWith('avg__'))} colors={SENSOR_COLORS} />}
+      </div>
+
+      {/* ── Chart.js ── */}
+      <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '2px solid #FDE68A' }}>
+        <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: '0 0 4px' }}>Chart.js + zoom plugin</h2>
+        <p style={{ fontSize: '13px', color: '#D97706', margin: '0 0 12px', fontWeight: '500' }}>Scroll to zoom · Click and drag to pan</p>
+        <ChartJSChart history={history} sensorKeys={sensorKeys.filter(k => k.startsWith('avg__'))} colors={SENSOR_COLORS} />
       </div>
     </div>
   );

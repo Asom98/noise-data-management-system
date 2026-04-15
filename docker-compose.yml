@@ -36,6 +36,18 @@ services:
     volumes:
       - ./services/yggio_api:/app
 
+  live_fake_generator:
+    build: ./services/yggio_api
+    container_name: live_fake_generator
+    restart: unless-stopped
+    command: python -u live_fake_generator.py
+    env_file:
+      - ./services/yggio_api/.env
+    depends_on:
+      - timescaledb
+    volumes:
+      - ./services/yggio_api:/app
+
   frontend_api:
     build: ./services/frontend_api
     container_name: frontend_api

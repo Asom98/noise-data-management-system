@@ -94,9 +94,8 @@ def get_historical_measurements(hours: int = Query(default=1, ge=1, le=168)):
         history_dict = {}
         for row in measurements:
             time_str = row['time_block'].strftime(time_format)
-            # Use human-readable location description as the chart series key.
-            # Fall back to sensor_id if description is missing.
-            label = (row['description'] or row['sensor_id'])[:25]
+            # Use sensor_id as the chart series key to ensure uniqueness.
+            label = row['sensor_id'][:25]
 
             if time_str not in history_dict:
                 history_dict[time_str] = {"time": time_str}

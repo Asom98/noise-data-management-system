@@ -17,11 +17,11 @@ load_dotenv()
 INTERVAL = 10  # seconds between each batch of readings
 
 SENSORS = [
-    {"id": "DN0007-Buller Spångatan x Bergsgatan",           "base": 58, "type": "intersection"},
-    {"id": "DN0008-Buller Västravarvsgatan",                  "base": 54, "type": "residential"},
-    {"id": "DN0009-Buller Bergsgatan 17",                     "base": 56, "type": "street"},
-    {"id": "DN0010-Buller Föreningsgatan x Disponentgatan",   "base": 60, "type": "intersection"},
-    {"id": "DN0011-Buller Fersens v. x E. Dahlbergsg.",       "base": 52, "type": "residential"},
+    {"id": "DN0007-Buller Spångatan x Bergsgatan",           "base": 58, "type": "intersection", "lat": 55.6051, "lon": 13.0015},
+    {"id": "DN0008-Buller Västravarvsgatan",                  "base": 54, "type": "residential",  "lat": 55.6141, "lon": 12.9721},
+    {"id": "DN0009-Buller Bergsgatan 17",                     "base": 56, "type": "street",        "lat": 55.6058, "lon": 13.0028},
+    {"id": "DN0010-Buller Föreningsgatan x Disponentgatan",   "base": 60, "type": "intersection", "lat": 55.5959, "lon": 13.0083},
+    {"id": "DN0011-Buller Fersens v. x E. Dahlbergsg.",       "base": 52, "type": "residential",  "lat": 55.6008, "lon": 13.0052},
 ]
 
 HOUR_PROFILE = {
@@ -69,6 +69,18 @@ def quality_flag(value: float) -> int:
     return 0
 
 
+def register_sensors(conn):
+    with conn.cursor() as cur:
+        for s in SENSORS:
+            cur.execute("""
+                INSERT INTO sensors (sensor_id, description, lat, lon)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (sensor_id) DO UPDATE
+                    SET lat = EXCLUDED.lat, lon = EXCLUDED.lon;
+            """, (s["id"], s["id"].split("-Buller ", 1)[-1], s["lat"], s["lon"]))
+    conn.commit()
+
+
 def insert_batch(conn, rows):
     with conn.cursor() as cur:
         psycopg2.extras.execute_values(
@@ -85,6 +97,11 @@ def run():
     print(f"Sensors: {len(SENSORS)}")
 
     conn = None
+    # Register sensors with coordinates on every startup
+    conn = get_db()
+    register_sensors(conn)
+    print("Sensors registered with lat/lon.", flush=True)
+
     while True:
         try:
             if conn is None or conn.closed:

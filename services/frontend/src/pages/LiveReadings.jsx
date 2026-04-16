@@ -39,12 +39,12 @@ function SensorCard({ sensor_id, description, value_db, prev_db, ts }) {
         <span style={{ fontSize: '14px', color: '#6B7280' }}>dB</span>
         {delta !== null && (
           <span style={{
-            fontSize: '12px', fontWeight: '500',
+            fontSize: '18px', fontWeight: '600',
             color: parseFloat(delta) > 0 ? '#EF4444' : parseFloat(delta) < 0 ? '#10B981' : '#6B7280',
-            display: 'flex', alignItems: 'center', gap: '2px',
+            display: 'flex', alignItems: 'center', gap: '3px',
           }}>
             {parseFloat(delta) > 0 ? '↑' : parseFloat(delta) < 0 ? '↓' : '→'}
-            {Math.abs(parseFloat(delta))}
+            <span style={{ fontSize: '14px' }}>{Math.abs(parseFloat(delta))}</span>
           </span>
         )}
       </div>
@@ -60,11 +60,21 @@ function SensorCard({ sensor_id, description, value_db, prev_db, ts }) {
   );
 }
 
+function useClock() {
+  const [time, setTime] = useState(() => new Date().toLocaleTimeString());
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date().toLocaleTimeString()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+}
+
 export default function LiveReadings() {
   const { t } = useLanguage();
   const [readings, setReadings] = useState([]);
   const [loading, setLoading] = useState(true);
   const prevRef = useRef({});
+  const currentTime = useClock();
 
   async function fetchData() {
     try {
@@ -100,7 +110,10 @@ export default function LiveReadings() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{t.liveReadings.title}</h1>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{t.liveReadings.title}</h1>
+            <span style={{ fontSize: '20px', fontWeight: '600', color: '#374151', fontVariantNumeric: 'tabular-nums' }}>{currentTime}</span>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
             <div style={{
               width: '8px', height: '8px', borderRadius: '50%',
@@ -132,10 +145,10 @@ export default function LiveReadings() {
         <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: '0 0 16px 0' }}>{t.liveReadings.guidelines}</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
           {[
-            { label: t.liveReadings.levelNormal,   range: '< 60 dB',   color: '#10B981', bg: '#ECFDF5', desc: t.liveReadings.descNormal },
-            { label: t.liveReadings.levelModerate, range: '60–70 dB',  color: '#F59E0B', bg: '#FFFBEB', desc: t.liveReadings.descModerate },
-            { label: t.liveReadings.levelHigh,     range: '70–80 dB',  color: '#F97316', bg: '#FFF7ED', desc: t.liveReadings.descHigh },
-            { label: t.liveReadings.levelCritical, range: '80+ dB',    color: '#EF4444', bg: '#FEF2F2', desc: t.liveReadings.descCritical },
+            { label: t.liveReadings.levelNormal,   range: '< 70 dB',   color: '#10B981', bg: '#ECFDF5', desc: t.liveReadings.descNormal },
+            { label: t.liveReadings.levelModerate, range: '70–80 dB',  color: '#F59E0B', bg: '#FFFBEB', desc: t.liveReadings.descModerate },
+            { label: t.liveReadings.levelHigh,     range: '80–90 dB',  color: '#F97316', bg: '#FFF7ED', desc: t.liveReadings.descHigh },
+            { label: t.liveReadings.levelCritical, range: '> 90 dB',   color: '#EF4444', bg: '#FEF2F2', desc: t.liveReadings.descCritical },
           ].map((g) => (
             <div key={g.label} style={{ padding: '12px 16px', borderRadius: '8px', backgroundColor: g.bg, border: `1px solid ${g.color}33` }}>
               <div style={{ fontSize: '13px', fontWeight: '600', color: g.color }}>{g.label}</div>

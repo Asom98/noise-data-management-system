@@ -26,10 +26,10 @@ export default function AlertsOutliers() {
     return () => clearInterval(interval);
   }, []);
 
-  const highOutliers = alerts.filter((a) => a.alert_type === 'High' || a.alert_type === 'Critical');
+  const highOutliers = alerts.filter((a) => a.alert_type === 'Warning' || a.alert_type === 'Critical');
   const lowOutliers = alerts.filter((a) => a.alert_type === 'Low');
   const criticalAlerts = alerts.filter((a) => a.alert_type === 'Critical');
-  const warningAlerts = alerts.filter((a) => a.alert_type === 'High');
+  const warningAlerts = alerts.filter((a) => a.alert_type === 'Warning');
 
   const filtered = filter === 'high' ? highOutliers : filter === 'low' ? lowOutliers : alerts;
 
@@ -110,9 +110,9 @@ export default function AlertsOutliers() {
               <tbody>
                 {filtered.map((alert, idx) => {
                   const color = getNoiseColor(alert.value_db);
-                  const typeBg = alert.alert_type === 'Critical' ? '#FEF2F2' : alert.alert_type === 'High' ? '#FFF7ED' : '#EFF6FF';
-                  const typeColor = alert.alert_type === 'Critical' ? '#EF4444' : alert.alert_type === 'High' ? '#F97316' : '#2563EB';
-                  const typeLabel = alert.alert_type === 'Critical' ? t.alerts.typeCritical : alert.alert_type === 'High' ? t.alerts.typeHigh : t.alerts.typeLow;
+                  const typeBg = alert.alert_type === 'Critical' ? '#FEF2F2' : alert.alert_type === 'Warning' ? '#FFF7ED' : '#EFF6FF';
+                  const typeColor = alert.alert_type === 'Critical' ? '#EF4444' : alert.alert_type === 'Warning' ? '#F97316' : '#2563EB';
+                  const typeLabel = alert.alert_type === 'Critical' ? t.alerts.typeCritical : alert.alert_type === 'Warning' ? t.alerts.typeWarning : t.alerts.typeLow;
                   return (
                     <tr key={idx} style={{ borderBottom: '1px solid #F3F4F6' }}>
                       <td style={{ padding: '12px 16px' }}>
@@ -122,7 +122,17 @@ export default function AlertsOutliers() {
                       </td>
                       <td style={{ padding: '12px 16px', color: '#374151' }}>{getSensorDisplayName(alert.sensor_id, alert.description)}</td>
                       <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontWeight: '700', fontSize: '15px', color }}>{alert.value_db.toFixed(1)} dB</span>
+                        {alert.alert_type === 'Low' ? (
+                          <span>
+                            <span style={{ fontWeight: '700', fontSize: '15px', color }}>{(alert.lamin_db ?? alert.value_db).toFixed(1)} dB</span>
+                            <span style={{ fontSize: '10px', color: '#9CA3AF', marginLeft: '5px' }}>Lamin</span>
+                          </span>
+                        ) : (
+                          <span>
+                            <span style={{ fontWeight: '700', fontSize: '15px', color }}>{(alert.lamax_db ?? alert.value_db).toFixed(1)} dB</span>
+                            <span style={{ fontSize: '10px', color: '#9CA3AF', marginLeft: '5px' }}>Lamax</span>
+                          </span>
+                        )}
                       </td>
                       <td style={{ padding: '12px 16px' }}>
                         <span style={{ backgroundColor: typeBg, color: typeColor, padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>

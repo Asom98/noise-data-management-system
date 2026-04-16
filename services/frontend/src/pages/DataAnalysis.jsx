@@ -79,7 +79,7 @@ export default function DataAnalysis() {
             <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} formatter={(v, n) => [`${v} dB`, n.replace(/^avg__|^max__/, '')]} />
             <Legend wrapperStyle={{ fontSize: '12px' }} formatter={(v) => v.replace(/^avg__|^max__/, '')} />
             {displayKeys.map((key, i) => (
-              <Area key={key} type="monotone" dataKey={key} name={key.replace(/^avg__|^max__/, '')} stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]} fill={SENSOR_COLORS[i % SENSOR_COLORS.length] + '22'} dot={false} strokeWidth={2} connectNulls />
+              <Area key={key} type="linear" dataKey={key} name={key.replace(/^avg__|^max__/, '')} stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]} fill={SENSOR_COLORS[i % SENSOR_COLORS.length] + '22'} dot={false} strokeWidth={2} connectNulls />
             ))}
           </AreaChart>
         </ResponsiveContainer>
@@ -114,7 +114,7 @@ export default function DataAnalysis() {
           <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} formatter={(v, n) => [`${v} dB`, n.replace(/^avg__|^max__/, '')]} />
           <Legend wrapperStyle={{ fontSize: '12px' }} formatter={(v) => v.replace(/^avg__|^max__/, '')} />
           {displayKeys.map((key, i) => (
-            <Line key={key} type="monotone" dataKey={key} name={key.replace(/^avg__|^max__/, '')} stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]} dot={false} strokeWidth={2} connectNulls />
+            <Line key={key} type="linear" dataKey={key} name={key.replace(/^avg__|^max__/, '')} stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]} dot={false} strokeWidth={2} connectNulls />
           ))}
         </LineChart>
       </ResponsiveContainer>

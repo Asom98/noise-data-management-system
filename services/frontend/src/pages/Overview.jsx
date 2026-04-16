@@ -179,6 +179,9 @@ export default function Overview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hours, setHours] = useState(1);
+  const [metric, setMetric] = useState('laeq'); // 'laeq' | 'lamin'
+  const [yMin, setYMin] = useState('');
+  const [yMax, setYMax] = useState('');
   const settings = loadSettings();
 
   useEffect(() => {
@@ -193,7 +196,7 @@ export default function Overview() {
         setHistory(data);
         if (data.length > 0) {
           const keySet = new Set();
-          data.forEach((row) => Object.keys(row).forEach((k) => { if (k.startsWith('avg__')) keySet.add(k); }));
+          data.forEach((row) => Object.keys(row).forEach((k) => { if (k.startsWith('avg__') || k.startsWith('lamin__')) keySet.add(k); }));
           setSensorKeys([...keySet]);
         }
       } catch (e) {
@@ -233,16 +236,19 @@ export default function Overview() {
     return () => clearInterval(interval);
   }, [echartsHours]);
 
-  function toggleSensor(key) {
+  const prefix = metric === 'lamin' ? 'lamin__' : 'avg__';
+  const metricKeys = sensorKeys.filter((k) => k.startsWith(prefix));
+  const visibleKeys = metricKeys.filter((k) => !hiddenSensors.has(k.replace(prefix, 'avg__')));
+  // Normalise toggle state: hidden set always uses avg__ key as stable ID
+  function toggleSensorByLabel(label) {
+    const stableKey = `avg__${label}`;
     setHiddenSensors((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      if (next.has(stableKey)) next.delete(stableKey);
+      else next.add(stableKey);
       return next;
     });
   }
-
-  const visibleKeys = sensorKeys.filter((k) => !hiddenSensors.has(k));
 
   if (loading) {
     return (
@@ -279,9 +285,10 @@ export default function Overview() {
           }
         />
         <KpiCard
-          title={t.overview.avgNoise}
-          value={stats?.avg_noise_db != null ? `${stats.avg_noise_db} dB` : '—'}
-          subtitle={t.overview.avgNoiseSubtitle}
+          title={t.overview.peakNoise}
+          value={stats?.peak_noise_db != null ? `${stats.peak_noise_db} dB` : '—'}
+          subtitle={stats?.peak_sensor_id ? `${t.overview.peakNoiseSubtitle} ${stats.peak_sensor_id}` : t.overview.peakNoiseSubtitle}
+          borderHighlight={stats?.peak_noise_db != null && stats.peak_noise_db > 80 ? '#EF4444' : undefined}
           icon={
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           }
@@ -345,17 +352,65 @@ export default function Overview() {
           </div>
         </div>
 
+        {/* Metric toggle: Laeq / Lamin */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: '500' }}>Metric:</span>
+          {[{ id: 'laeq', label: 'Laeq' }, { id: 'lamin', label: 'Lamin' }].map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setMetric(id)}
+              style={{
+                padding: '4px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer',
+                backgroundColor: metric === id ? '#EFF6FF' : 'white',
+                color: metric === id ? '#2563EB' : '#374151',
+                border: metric === id ? '1px solid #BFDBFE' : '1px solid #E5E7EB',
+              }}
+            >{label}</button>
+          ))}
+          {metric === 'lamin' && (
+            <span style={{ fontSize: '11px', color: '#9CA3AF' }}>Average of per-reading Lamin values per bucket</span>
+          )}
+        </div>
+
+        {/* Y-axis range control */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '12px', color: '#6B7280', fontWeight: '500' }}>Y-axis:</span>
+          <input
+            type="number"
+            placeholder="Min"
+            value={yMin}
+            onChange={(e) => setYMin(e.target.value)}
+            style={{ width: '70px', padding: '4px 8px', fontSize: '12px', border: '1px solid #E5E7EB', borderRadius: '6px', color: '#374151' }}
+          />
+          <span style={{ fontSize: '12px', color: '#9CA3AF' }}>–</span>
+          <input
+            type="number"
+            placeholder="Max"
+            value={yMax}
+            onChange={(e) => setYMax(e.target.value)}
+            style={{ width: '70px', padding: '4px 8px', fontSize: '12px', border: '1px solid #E5E7EB', borderRadius: '6px', color: '#374151' }}
+          />
+          <span style={{ fontSize: '12px', color: '#9CA3AF' }}>dB</span>
+          {(yMin !== '' || yMax !== '') && (
+            <button
+              onClick={() => { setYMin(''); setYMax(''); }}
+              style={{ fontSize: '12px', color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+            >Reset</button>
+          )}
+        </div>
+
         {/* Sensor toggle pills */}
-        {sensorKeys.length > 0 && (
+        {metricKeys.length > 0 && (
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-            {sensorKeys.map((key, i) => {
-              const label = key.replace('avg__', '');
-              const isHidden = hiddenSensors.has(key);
+            {metricKeys.map((key, i) => {
+              const label = key.replace(prefix, '');
+              const stableKey = `avg__${label}`;
+              const isHidden = hiddenSensors.has(stableKey);
               const color = SENSOR_COLORS[i % SENSOR_COLORS.length];
               return (
                 <button
                   key={key}
-                  onClick={() => toggleSensor(key)}
+                  onClick={() => toggleSensorByLabel(label)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '6px',
                     padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '500',
@@ -386,20 +441,20 @@ export default function Overview() {
             <LineChart data={history} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
               <XAxis dataKey="time" tick={{ fontSize: 11, fill: '#6B7280' }} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} domain={['auto', 'auto']} unit=" dB" width={55} />
+              <YAxis tick={{ fontSize: 11, fill: '#6B7280' }} domain={[yMin !== '' ? Number(yMin) : 'auto', yMax !== '' ? Number(yMax) : 'auto']} unit=" dB" width={55} />
               <Tooltip
                 contentStyle={{ fontSize: '12px', border: '1px solid #E5E7EB', borderRadius: '8px' }}
                 formatter={(v, name) => [`${v} dB`, name]}
               />
               <Legend wrapperStyle={{ fontSize: '12px' }} />
               <ReferenceLine y={settings.highThreshold} stroke="#EF4444" strokeDasharray="5 5" label={{ value: `${settings.highThreshold} dB`, fill: '#EF4444', fontSize: 11 }} />
-              {sensorKeys.map((key, i) => (
+              {metricKeys.map((key, i) => (
                 visibleKeys.includes(key) && (
                   <Line
                     key={key}
-                    type="monotone"
+                    type="linear"
                     dataKey={key}
-                    name={key.replace('avg__', '')}
+                    name={key.replace(prefix, '')}
                     stroke={SENSOR_COLORS[i % SENSOR_COLORS.length]}
                     dot={false}
                     strokeWidth={2}

@@ -42,9 +42,9 @@ const HistoricalTrendChart = () => {
             {data.length > 0 && Object.keys(data[0])
               .filter(key => key !== 'time')
               .map((sensorName, index) => (
-                <Line 
+                <Line
                   key={sensorName}
-                  type="monotone" // This makes the lines perfectly curved and smooth like Figma!
+                  type="linear"
                   dataKey={sensorName} 
                   stroke={colors[index % colors.length]} 
                   strokeWidth={2}

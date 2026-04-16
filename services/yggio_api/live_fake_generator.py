@@ -48,7 +48,8 @@ def get_db():
     )
 
 
-def noise_value(sensor: dict, ts: datetime) -> float:
+def noise_values(sensor: dict, ts: datetime) -> tuple:
+    """Returns (laeq, lamax, lamin) for a sensor at the given timestamp."""
     hour        = ts.hour
     minute      = ts.minute
     next_hour   = (hour + 1) % 24
@@ -57,8 +58,10 @@ def noise_value(sensor: dict, ts: datetime) -> float:
     base        = sensor["base"] * multiplier * TYPE_FACTOR[sensor["type"]]
     noise       = random.gauss(0, 2.5)
     spike       = random.choice([0] * 19 + [random.uniform(8, 20)])
-    value       = base + noise + spike
-    return round(max(30.0, min(95.0, value)), 1)
+    laeq        = round(max(30.0, min(95.0, base + noise + spike)), 1)
+    lamax       = round(min(110.0, laeq + random.uniform(5.0, 15.0)), 1)
+    lamin       = round(max(20.0,  laeq - random.uniform(5.0, 15.0)), 1)
+    return laeq, lamax, lamin
 
 
 def quality_flag(value: float) -> int:
@@ -85,7 +88,7 @@ def insert_batch(conn, rows):
     with conn.cursor() as cur:
         psycopg2.extras.execute_values(
             cur,
-            "INSERT INTO noise_measurements (ts, sensor_id, value_db, unit, quality_flag) VALUES %s",
+            "INSERT INTO noise_measurements (ts, sensor_id, value_db, lamax_db, lamin_db, unit, quality_flag) VALUES %s",
             rows,
         )
     conn.commit()
@@ -112,13 +115,13 @@ def run():
             ts   = datetime.now(timezone.utc)
             rows = []
             for sensor in SENSORS:
-                value = noise_value(sensor, ts)
-                flag  = quality_flag(value)
-                rows.append((ts, sensor["id"], value, "dB", flag))
+                laeq, lamax, lamin = noise_values(sensor, ts)
+                flag = quality_flag(laeq)
+                rows.append((ts, sensor["id"], laeq, lamax, lamin, "dB", flag))
 
             insert_batch(conn, rows)
 
-            values_str = "  ".join(f"{s['id'].split('-')[0]}: {r[2]} dB" for s, r in zip(SENSORS, rows))
+            values_str = "  ".join(f"{s['id'].split('-')[0]}: {r[2]}/{r[3]}/{r[4]} dB" for s, r in zip(SENSORS, rows))
             print(f"[{ts.strftime('%H:%M:%S')}]  {values_str}", flush=True)
 
         except psycopg2.OperationalError as e:

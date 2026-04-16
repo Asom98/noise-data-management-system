@@ -9,8 +9,8 @@ export const SENSOR_COLORS = [
 ];
 
 export function getNoiseLevel(db, thresholds) {
-  const h = thresholds?.highThreshold ?? 70;
-  const c = thresholds?.criticalThreshold ?? 80;
+  const h = thresholds?.highThreshold ?? 80;
+  const c = thresholds?.criticalThreshold ?? 90;
   if (db >= c) return 'critical';
   if (db >= h) return 'high';
   if (db >= h - 10) return 'moderate';
@@ -18,17 +18,17 @@ export function getNoiseLevel(db, thresholds) {
 }
 
 export function getNoiseLevelLabel(db, thresholds) {
-  const h = thresholds?.highThreshold ?? 70;
-  const c = thresholds?.criticalThreshold ?? 80;
-  if (db >= c) return 'Kritisk';
-  if (db >= h) return 'Hög';
-  if (db >= h - 10) return 'Måttlig';
+  const h = thresholds?.highThreshold ?? 80;
+  const c = thresholds?.criticalThreshold ?? 90;
+  if (db >= c) return 'Immediate attention required';
+  if (db >= h) return 'Approaching attention required';
+  if (db >= h - 10) return 'Elevated';
   return 'Normal';
 }
 
 export function getNoiseColor(db, thresholds) {
-  const h = thresholds?.highThreshold ?? 70;
-  const c = thresholds?.criticalThreshold ?? 80;
+  const h = thresholds?.highThreshold ?? 80;
+  const c = thresholds?.criticalThreshold ?? 90;
   if (db >= c) return '#EF4444';
   if (db >= h) return '#F97316';
   if (db >= h - 10) return '#F59E0B';
@@ -36,8 +36,8 @@ export function getNoiseColor(db, thresholds) {
 }
 
 export function getNoiseBg(db, thresholds) {
-  const h = thresholds?.highThreshold ?? 70;
-  const c = thresholds?.criticalThreshold ?? 80;
+  const h = thresholds?.highThreshold ?? 80;
+  const c = thresholds?.criticalThreshold ?? 90;
   if (db >= c) return '#FEF2F2';
   if (db >= h) return '#FFF7ED';
   if (db >= h - 10) return '#FFFBEB';
@@ -63,8 +63,8 @@ export function saveSettings(settings) {
 
 function defaultSettings() {
   return {
-    highThreshold: 70,
-    criticalThreshold: 80,
+    highThreshold: 80,
+    criticalThreshold: 90,
     criticalAlerts: true,
     dailySummary: true,
     weeklyReport: true,

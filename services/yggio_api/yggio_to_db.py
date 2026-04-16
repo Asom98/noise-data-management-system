@@ -44,52 +44,50 @@ def fetch_live_data():
         return nodes_resp.json()
     return None
 
-def extract_noise_value(values_dict):
+def extract_noise_values(values_dict):
     """
-    Extracts the primary acoustic noise level (dB) from the Yggio sensor payload.
+    Extracts Laeq, Lamax, and Lamin from the Yggio sensor payload.
 
-    Priority order:
+    Returns a dict: {'laeq': float|None, 'lamax': float|None, 'lamin': float|None}
+
+    Laeq priority:
       1. soundLaeq  — equivalent continuous noise level (acoustically correct standard)
       2. soundLevel — instantaneous level (used by DN0007, DN0008, DN0010)
 
-    Explicitly excluded (NOT dB values):
-      - soundAvgMinutes  — averaging window in minutes (integer metadata, e.g. 1 or 15)
+    Explicitly excluded (NOT dB measurement values):
+      - soundAvgMinutes  — averaging window in minutes (integer metadata)
       - soundMinLevel    — minimum threshold configuration, not a measurement
-      - soundLamin       — minimum level over window (secondary statistic, not primary)
-      - soundLamax       — maximum level over window (secondary statistic)
-      - soundP1/P10/P50/P90/P99 — percentile statistics, not the primary reading
+      - soundP1/P10/P50/P90/P99 — percentile statistics
 
-    This two-pass approach prevents the dict-iteration-order bug where
-    soundAvgMinutes (value=15 or 1) was returned before soundLevel for
-    sensors DN0007 and DN0008.
+    The two-pass approach for Laeq prevents the dict-iteration-order bug where
+    soundAvgMinutes (value=15 or 1) was returned before soundLevel.
     """
     EXCLUDED = {
-        'soundavgminutes', 'soundminlevel', 'soundlamin', 'soundlamax',
+        'soundavgminutes', 'soundminlevel',
         'soundp1', 'soundp10', 'soundp50', 'soundp90', 'soundp99',
     }
 
-    def _flat_search(d, keyword):
-        """Single-pass search for one exact keyword substring, skipping excluded keys."""
+    def _flat_find(d, keyword):
         for key, val in d.items():
             key_lower = key.lower()
             if isinstance(val, dict):
-                result = _flat_search(val, keyword)
+                result = _flat_find(val, keyword)
                 if result is not None:
                     return result
             elif (keyword in key_lower
                   and key_lower not in EXCLUDED
-                  and not any(ex in key_lower for ex in EXCLUDED)
                   and isinstance(val, (int, float))):
                 return float(val)
         return None
 
-    # Pass 1: prefer soundLaeq (acoustically correct equivalent-continuous level)
-    result = _flat_search(values_dict, 'soundlaeq')
-    if result is not None:
-        return result
+    laeq = _flat_find(values_dict, 'soundlaeq')
+    if laeq is None:
+        laeq = _flat_find(values_dict, 'soundlevel')
 
-    # Pass 2: fall back to soundLevel (instantaneous reading)
-    return _flat_search(values_dict, 'soundlevel')
+    lamax = _flat_find(values_dict, 'soundlamax')
+    lamin = _flat_find(values_dict, 'soundlamin')
+
+    return {'laeq': laeq, 'lamax': lamax, 'lamin': lamin}
 
 def ingest_to_timescale(nodes):
     """Parses API data, registers ANY new sensors, and inserts data"""
@@ -124,23 +122,25 @@ def ingest_to_timescale(nodes):
             print(f"Failed to register sensor {node_id}: {e}")
             continue
             
-        # 2. THE SCALABLE FIX: Dynamically extract the noise value without hardcoded IDs!
-        noise_value = extract_noise_value(values)
-            
+        # 2. Dynamically extract Laeq, Lamax, Lamin from the sensor payload
+        noise_values = extract_noise_values(values)
+        laeq  = noise_values['laeq']
+        lamax = noise_values['lamax']
+        lamin = noise_values['lamin']
+
         # 3. Save to the database
-        if noise_value is not None and reported_at is not None:
+        if laeq is not None and reported_at is not None:
             try:
-                # ADDED: ON CONFLICT (sensor_id, ts) DO NOTHING
                 insert_query = """
-                    INSERT INTO noise_measurements (ts, sensor_id, value_db, unit, quality_flag)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (sensor_id, ts) DO NOTHING; 
+                    INSERT INTO noise_measurements (ts, sensor_id, value_db, lamax_db, lamin_db, unit, quality_flag)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (sensor_id, ts) DO NOTHING;
                 """
-                cursor.execute(insert_query, (reported_at, node_id, noise_value, 'dB', 1))
+                cursor.execute(insert_query, (reported_at, node_id, laeq, lamax, lamin, 'dB', 1))
                 
                 # Check if a row was actually inserted, or if it was ignored as a duplicate!
                 if cursor.rowcount > 0:
-                    print(f"✅ NEW DATA: {node_id} -> {noise_value} dB at {reported_at}")
+                    print(f"✅ NEW DATA: {node_id} -> Laeq={laeq} Lamax={lamax} Lamin={lamin} dB at {reported_at}")
                     success_count += 1
                 else:
                     print(f"⏩ Skipped duplicate: {node_id} at {reported_at}")

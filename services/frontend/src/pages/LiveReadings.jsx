@@ -27,7 +27,7 @@ function SensorCard({ sensor_id, description, value_db, prev_db, ts }) {
         }}>
           {sensor_id}
         </span>
-        {ts && <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{new Date(ts).toLocaleTimeString()}</span>}
+        {ts && <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{new Date(ts).toLocaleTimeString('sv-SE')}</span>}
       </div>
       <div style={{ fontSize: '13px', color: '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {displayName}

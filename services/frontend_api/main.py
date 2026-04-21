@@ -27,6 +27,101 @@ def get_db():
         password=os.getenv("DB_PASSWORD", "noise_password")
     )
 
+@app.get("/api/db/summary")
+def get_db_summary():
+    """Returns a summary of what's in the database: total records, per-sensor counts, time range."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute("SELECT COUNT(*) as total FROM noise_measurements;")
+        total = cursor.fetchone()['total']
+
+        cursor.execute("SELECT MIN(ts) as oldest, MAX(ts) as newest FROM noise_measurements;")
+        row = cursor.fetchone()
+
+        cursor.execute("""
+            SELECT m.sensor_id, s.description, COUNT(*) as record_count,
+                   ROUND(AVG(m.value_db)::numeric, 1) as avg_db,
+                   ROUND(MIN(m.value_db)::numeric, 1) as min_db,
+                   ROUND(MAX(m.value_db)::numeric, 1) as max_db,
+                   MAX(m.ts) as last_seen
+            FROM noise_measurements m
+            LEFT JOIN sensors s ON m.sensor_id = s.sensor_id
+            GROUP BY m.sensor_id, s.description
+            ORDER BY m.sensor_id;
+        """)
+        per_sensor = cursor.fetchall()
+        conn.close()
+
+        return {
+            "total_records": total,
+            "oldest": row['oldest'].isoformat() if row['oldest'] else None,
+            "newest": row['newest'].isoformat() if row['newest'] else None,
+            "per_sensor": [
+                {
+                    "sensor_id": r['sensor_id'],
+                    "description": r['description'],
+                    "record_count": r['record_count'],
+                    "avg_db": float(r['avg_db']) if r['avg_db'] else None,
+                    "min_db": float(r['min_db']) if r['min_db'] else None,
+                    "max_db": float(r['max_db']) if r['max_db'] else None,
+                    "last_seen": r['last_seen'].isoformat() if r['last_seen'] else None,
+                }
+                for r in per_sensor
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/db/raw")
+def get_raw_measurements(
+    sensor_id: str = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    """Returns paginated raw measurements, optionally filtered by sensor."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        where = "WHERE m.sensor_id = %s" if sensor_id else ""
+        params = [sensor_id] if sensor_id else []
+
+        cursor.execute(f"""
+            SELECT m.ts, m.sensor_id, s.description, m.value_db, m.unit, m.quality_flag
+            FROM noise_measurements m
+            LEFT JOIN sensors s ON m.sensor_id = s.sensor_id
+            {where}
+            ORDER BY m.ts DESC
+            LIMIT %s OFFSET %s;
+        """, params + [limit, offset])
+
+        rows = cursor.fetchall()
+
+        cursor.execute(f"SELECT COUNT(*) as total FROM noise_measurements m {where};", params)
+        total = cursor.fetchone()['total']
+        conn.close()
+
+        return {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "rows": [
+                {
+                    "ts": r['ts'].isoformat(),
+                    "sensor_id": r['sensor_id'],
+                    "description": r['description'],
+                    "value_db": float(r['value_db']),
+                    "unit": r['unit'],
+                    "quality_flag": r['quality_flag'],
+                }
+                for r in rows
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/sensors")
 def get_sensors():
     """Returns all sensors and their spatial coordinates for the Map view."""

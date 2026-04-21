@@ -10,6 +10,7 @@ import SensorHealth from './pages/SensorHealth';
 import DataAnalysis from './pages/DataAnalysis';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import DatabaseExplorer from './pages/DatabaseExplorer';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 
 function PlaceholderPage({ titleKey, descKey }) {
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="/data-analysis" element={<Layout><DataAnalysis /></Layout>} />
           <Route path="/reports" element={<Layout><Reports /></Layout>} />
           <Route path="/settings" element={<Layout><Settings /></Layout>} />
+          <Route path="/database" element={<Layout><DatabaseExplorer /></Layout>} />
           <Route path="/notifications" element={<Layout><PlaceholderPage titleKey="notifications" descKey="notificationsDesc" /></Layout>} />
           <Route path="/system" element={<Layout><PlaceholderPage titleKey="system" descKey="systemDesc" /></Layout>} />
           <Route path="*" element={<Layout><Overview /></Layout>} />

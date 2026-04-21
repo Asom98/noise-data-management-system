@@ -129,7 +129,7 @@ export default function AlertsOutliers() {
                           {typeLabel}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 16px', color: '#6B7280', whiteSpace: 'nowrap' }}>{new Date(alert.ts).toLocaleString()}</td>
+                      <td style={{ padding: '12px 16px', color: '#6B7280', whiteSpace: 'nowrap' }}>{new Date(alert.ts).toLocaleString('sv-SE')}</td>
                       <td style={{ padding: '12px 16px', color: '#9CA3AF', fontSize: '12px' }}>—</td>
                     </tr>
                   );

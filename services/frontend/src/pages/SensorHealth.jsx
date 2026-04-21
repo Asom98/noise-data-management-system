@@ -137,7 +137,7 @@ export default function SensorHealth() {
                     </td>
                     <td style={{ padding: '12px 16px' }}><StatusBadge status={sensor.status} t={t} /></td>
                     <td style={{ padding: '12px 16px', color: '#6B7280', whiteSpace: 'nowrap' }}>
-                      {sensor.last_seen ? new Date(sensor.last_seen).toLocaleString() : t.sensorHealth.never}
+                      {sensor.last_seen ? new Date(sensor.last_seen).toLocaleString('sv-SE') : t.sensorHealth.never}
                     </td>
                   </tr>
                 ))}

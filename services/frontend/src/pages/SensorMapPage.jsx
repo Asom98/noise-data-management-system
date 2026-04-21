@@ -127,7 +127,7 @@ export default function SensorMapPage() {
                       </div>
                       <div>
                         <div style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.lastUpdated}</div>
-                        <div style={{ fontSize: '13px', color: '#111827', marginTop: '2px' }}>{new Date(selected.measurement.ts).toLocaleTimeString()}</div>
+                        <div style={{ fontSize: '13px', color: '#111827', marginTop: '2px' }}>{new Date(selected.measurement.ts).toLocaleTimeString('sv-SE')}</div>
                       </div>
                     </>
                   )}

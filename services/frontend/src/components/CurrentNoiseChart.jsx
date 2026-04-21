@@ -42,7 +42,7 @@ const CurrentNoiseChart = () => {
         <h3 style={{ margin: 0, color: '#333' }}>Current Noise Levels (dB)</h3>
         {/* Visual indicator showing stakeholders exactly when the data last refreshed */}
         <span style={{ fontSize: '12px', color: '#10b981', backgroundColor: '#ecfdf5', padding: '4px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
-          Live • Last updated: {lastUpdated.toLocaleTimeString()}
+          Live • Last updated: {lastUpdated.toLocaleTimeString('sv-SE')}
         </span>
       </div>
       

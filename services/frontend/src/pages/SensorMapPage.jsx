@@ -4,25 +4,24 @@ import { MapContainer, TileLayer, CircleMarker, Circle, Tooltip, useMapEvents } 
 import 'leaflet/dist/leaflet.css';
 import { API_BASE, getNoiseColor, getSensorDisplayName } from '../utils/noise';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme, useSettings } from '../context/SettingsContext';
 
-function MapCoordDisplay() {
-  const [coords, setCoords] = useState(null);
-  useMapEvents({ mousemove(e) { setCoords(e.latlng); } });
-  if (!coords) return null;
-  return (
-    <div style={{ position: 'absolute', bottom: '12px', left: '12px', zIndex: 1000, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', color: '#374151', border: '1px solid #E5E7EB' }}>
-      {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
-    </div>
-  );
+// Captures mouse coords from Leaflet events — renders nothing itself
+function MapEventCapture({ onMove }) {
+  useMapEvents({ mousemove(e) { onMove(e.latlng); } });
+  return null;
 }
 
 export default function SensorMapPage() {
   const { t } = useLanguage();
+  const theme = useTheme();
+  const { settings } = useSettings();
   const [sensors, setSensors]       = useState([]);
   const [latest, setLatest]         = useState({});
   const [selected, setSelected]     = useState(null);
   const [showHeatZones, setShowHeatZones] = useState(true);
   const [loading, setLoading]       = useState(true);
+  const [coords, setCoords]         = useState(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -50,30 +49,52 @@ export default function SensorMapPage() {
     ? [sensors.reduce((s, x) => s + x.lat, 0) / sensors.length, sensors.reduce((s, x) => s + x.lon, 0) / sensors.length]
     : [55.6050, 13.0038];
 
+  const mapFilter = settings.darkMode
+    ? 'invert(92%) hue-rotate(180deg) brightness(0.85) contrast(1.05)'
+    : 'none';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: 'calc(100vh - 112px)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{t.sensorMap.title}</h1>
-          <p style={{ fontSize: '14px', color: '#6B7280', marginTop: '4px' }}>{t.sensorMap.subtitle}</p>
+          <h1 style={{ fontSize: '22px', fontWeight: '700', color: theme.textPrimary, margin: 0 }}>{t.sensorMap.title}</h1>
+          <p style={{ fontSize: '14px', color: theme.textSecondary, marginTop: '4px' }}>{t.sensorMap.subtitle}</p>
         </div>
         <button
           onClick={() => setShowHeatZones((v) => !v)}
-          style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '500', backgroundColor: showHeatZones ? '#EFF6FF' : 'white', color: showHeatZones ? '#2563EB' : '#374151', border: showHeatZones ? '1px solid #BFDBFE' : '1px solid #E5E7EB', cursor: 'pointer' }}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: '500',
+            backgroundColor: showHeatZones ? theme.accentBg : theme.cardBg,
+            color: showHeatZones ? theme.accent : theme.textSecondary,
+            border: showHeatZones ? `1px solid ${theme.accentBorder}` : `1px solid ${theme.border}`,
+            cursor: 'pointer',
+          }}
         >
           {showHeatZones ? t.sensorMap.hideHeatZones : t.sensorMap.showHeatZones}
         </button>
       </div>
 
       <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0 }}>
-        {/* Map */}
-        <div style={{ flex: 1, borderRadius: '12px', overflow: 'hidden', border: '1px solid #E5E7EB', position: 'relative', minHeight: '400px' }}>
+        {/* Map — wrapper is position:relative so coord overlay can sit outside the filter */}
+        <div style={{ flex: 1, position: 'relative', minHeight: '400px' }}>
+          <div
+            style={{
+              height: '100%',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              border: `1px solid ${theme.border}`,
+              filter: mapFilter,
+            }}
+          >
           {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#6B7280', backgroundColor: '#F9FAFB' }}>{t.sensorMap.loading}</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: theme.textSecondary, backgroundColor: theme.tableHeadBg }}>{t.sensorMap.loading}</div>
           ) : (
             <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
-              <MapCoordDisplay />
+              <MapEventCapture onMove={setCoords} />
               {sensors.map((sensor) => {
                 const m = latest[sensor.sensor_id];
                 const db = m ? m.value_db : null;
@@ -102,47 +123,57 @@ export default function SensorMapPage() {
               })}
             </MapContainer>
           )}
+          </div>
+          {/* Coordinate display — outside the filter div so dark mode doesn't invert it */}
+          {coords && (
+            <div style={{ position: 'absolute', bottom: '12px', left: '12px', zIndex: 1000, backgroundColor: theme.cardBg, borderRadius: '6px', padding: '4px 8px', fontSize: '11px', color: theme.textSecondary, border: `1px solid ${theme.border}` }}>
+              {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+            </div>
+          )}
         </div>
 
         {/* Right panel */}
         <div style={{ width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px', border: '1px solid #E5E7EB', flex: 1 }}>
+          <div style={{ backgroundColor: theme.cardBg, borderRadius: '12px', padding: '20px', border: `1px solid ${theme.border}`, flex: 1 }}>
             {selected ? (
               <div>
-                <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#111827', margin: '0 0 12px 0' }}>{t.sensorMap.sensorDetails}</h3>
+                <h3 style={{ fontSize: '15px', fontWeight: '600', color: theme.textPrimary, margin: '0 0 12px 0' }}>{t.sensorMap.sensorDetails}</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div>
-                    <div style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.sensorId}</div>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginTop: '2px' }}>{selected.sensor.sensor_id}</div>
+                    <div style={{ fontSize: '11px', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.sensorId}</div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: theme.textPrimary, marginTop: '2px' }}>{selected.sensor.sensor_id}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.location}</div>
-                    <div style={{ fontSize: '14px', color: '#111827', marginTop: '2px' }}>{getSensorDisplayName(selected.sensor.sensor_id, selected.sensor.description)}</div>
+                    <div style={{ fontSize: '11px', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.location}</div>
+                    <div style={{ fontSize: '14px', color: theme.textPrimary, marginTop: '2px' }}>{getSensorDisplayName(selected.sensor.sensor_id, selected.sensor.description)}</div>
                   </div>
                   {selected.measurement && (
                     <>
                       <div>
-                        <div style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.currentLevel}</div>
+                        <div style={{ fontSize: '11px', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.currentLevel}</div>
                         <div style={{ fontSize: '28px', fontWeight: '700', color: getNoiseColor(selected.measurement.value_db), marginTop: '2px' }}>{selected.measurement.value_db} dB</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.lastUpdated}</div>
-                        <div style={{ fontSize: '13px', color: '#111827', marginTop: '2px' }}>{new Date(selected.measurement.ts).toLocaleTimeString('sv-SE')}</div>
+                        <div style={{ fontSize: '11px', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.lastUpdated}</div>
+                        <div style={{ fontSize: '13px', color: theme.textPrimary, marginTop: '2px' }}>{new Date(selected.measurement.ts).toLocaleTimeString('sv-SE')}</div>
                       </div>
                     </>
                   )}
                   <div>
-                    <div style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.coordinates}</div>
-                    <div style={{ fontSize: '12px', color: '#374151', marginTop: '2px', fontFamily: 'monospace' }}>{selected.sensor.lat.toFixed(5)}, {selected.sensor.lon.toFixed(5)}</div>
+                    <div style={{ fontSize: '11px', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.sensorMap.coordinates}</div>
+                    <div style={{ fontSize: '12px', color: theme.textSecondary, marginTop: '2px', fontFamily: 'monospace' }}>{selected.sensor.lat.toFixed(5)}, {selected.sensor.lon.toFixed(5)}</div>
                   </div>
                 </div>
-                <button onClick={() => setSelected(null)} style={{ marginTop: '16px', width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #E5E7EB', backgroundColor: 'white', fontSize: '13px', color: '#6B7280', cursor: 'pointer' }}>
+                <button
+                  onClick={() => setSelected(null)}
+                  style={{ marginTop: '16px', width: '100%', padding: '8px', borderRadius: '6px', border: `1px solid ${theme.border}`, backgroundColor: theme.cardBg, fontSize: '13px', color: theme.textSecondary, cursor: 'pointer' }}
+                >
                   {t.sensorMap.clearSelection}
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '160px', color: '#6B7280', textAlign: 'center' }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5" style={{ marginBottom: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '160px', color: theme.textSecondary, textAlign: 'center' }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={theme.textMuted} strokeWidth="1.5" style={{ marginBottom: '8px' }}>
                   <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
                 </svg>
                 <p style={{ fontSize: '13px', margin: 0 }}>{t.sensorMap.clickPrompt}</p>
@@ -151,17 +182,18 @@ export default function SensorMapPage() {
           </div>
 
           {/* Legend */}
-          <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '16px 20px', border: '1px solid #E5E7EB' }}>
-            <h4 style={{ fontSize: '13px', fontWeight: '600', color: '#111827', margin: '0 0 12px 0' }}>{t.sensorMap.legend}</h4>
+          <div style={{ backgroundColor: theme.cardBg, borderRadius: '12px', padding: '16px 20px', border: `1px solid ${theme.border}` }}>
+            <h4 style={{ fontSize: '13px', fontWeight: '600', color: theme.textPrimary, margin: '0 0 12px 0' }}>{t.sensorMap.legend}</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {[
-                { color: '#10B981', bg: '#ECFDF5', label: t.sensorMap.legendNormal,   range: '< 65 dB' },
-                { color: '#F97316', bg: '#FFF7ED', label: t.sensorMap.legendModerate, range: '65–75 dB' },
-                { color: '#EF4444', bg: '#FEF2F2', label: t.sensorMap.legendHigh,     range: '> 75 dB' },
+                { color: '#10B981', bg: theme.tintGreen,  label: t.sensorMap.legendNormal,   range: '< 70 dB' },
+                { color: '#F59E0B', bg: theme.tintAmber,  label: t.sensorMap.legendModerate, range: '70–80 dB' },
+                { color: '#F97316', bg: theme.tintOrange, label: t.sensorMap.legendHigh,     range: '80–90 dB' },
+                { color: '#EF4444', bg: theme.tintRed,    label: t.sensorMap.legendCritical, range: '90+ dB' },
               ].map((item) => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: item.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: '13px', color: '#374151', flex: 1 }}>{item.label}</span>
+                  <span style={{ fontSize: '13px', color: theme.textSecondary, flex: 1 }}>{item.label}</span>
                   <span style={{ fontSize: '11px', color: item.color, backgroundColor: item.bg, padding: '2px 6px', borderRadius: '4px' }}>{item.range}</span>
                 </div>
               ))}

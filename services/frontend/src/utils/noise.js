@@ -9,26 +9,32 @@ export const SENSOR_COLORS = [
 ];
 
 export function getNoiseLevel(db, thresholds) {
-  const h = thresholds?.highThreshold ?? 70;
-  const c = thresholds?.criticalThreshold ?? 80;
+  const h = thresholds?.highThreshold ?? 80;
+  const c = thresholds?.criticalThreshold ?? 90;
   if (db >= c) return 'critical';
   if (db >= h) return 'high';
   if (db >= h - 10) return 'moderate';
   return 'normal';
 }
 
-export function getNoiseLevelLabel(db, thresholds) {
-  const h = thresholds?.highThreshold ?? 70;
-  const c = thresholds?.criticalThreshold ?? 80;
-  if (db >= c) return 'Kritisk';
-  if (db >= h) return 'Hög';
-  if (db >= h - 10) return 'Måttlig';
+export function getNoiseLevelLabel(db, thresholds, t) {
+  const h = thresholds?.highThreshold ?? 80;
+  const c = thresholds?.criticalThreshold ?? 90;
+  if (t) {
+    if (db >= c) return t.liveReadings.levelCritical;
+    if (db >= h) return t.liveReadings.levelHigh;
+    if (db >= h - 10) return t.liveReadings.levelModerate;
+    return t.liveReadings.levelNormal;
+  }
+  if (db >= c) return 'Immediate attention required';
+  if (db >= h) return 'Approaching attention required';
+  if (db >= h - 10) return 'Elevated';
   return 'Normal';
 }
 
 export function getNoiseColor(db, thresholds) {
-  const h = thresholds?.highThreshold ?? 70;
-  const c = thresholds?.criticalThreshold ?? 80;
+  const h = thresholds?.highThreshold ?? 80;
+  const c = thresholds?.criticalThreshold ?? 90;
   if (db >= c) return '#EF4444';
   if (db >= h) return '#F97316';
   if (db >= h - 10) return '#F59E0B';
@@ -36,8 +42,8 @@ export function getNoiseColor(db, thresholds) {
 }
 
 export function getNoiseBg(db, thresholds) {
-  const h = thresholds?.highThreshold ?? 70;
-  const c = thresholds?.criticalThreshold ?? 80;
+  const h = thresholds?.highThreshold ?? 80;
+  const c = thresholds?.criticalThreshold ?? 90;
   if (db >= c) return '#FEF2F2';
   if (db >= h) return '#FFF7ED';
   if (db >= h - 10) return '#FFFBEB';
@@ -61,14 +67,24 @@ export function saveSettings(settings) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
-function defaultSettings() {
+export function defaultSettings() {
   return {
-    highThreshold: 70,
-    criticalThreshold: 80,
+    // Alert thresholds
+    highThreshold: 80,
+    criticalThreshold: 90,
+    // Notification prefs
     criticalAlerts: true,
     dailySummary: true,
     weeklyReport: true,
     maintenanceReminders: false,
+    // Dashboard prefs
+    liveRefreshInterval: 10,   // seconds
+    overviewDefaultRange: 1,   // hours: 1 | 6 | 24
+    // Sensor health DAR thresholds
+    darOperationalMin: 80,     // % — above this = Operational
+    darWarningMin: 40,         // % — above this = Warning, below = Poor
+    // Appearance
+    darkMode: false,
   };
 }
 

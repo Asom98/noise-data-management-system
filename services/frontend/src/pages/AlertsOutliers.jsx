@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_BASE, getNoiseColor, getSensorDisplayName, downloadCSV } from '../utils/noise';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/SettingsContext';
 
 export default function AlertsOutliers() {
   const { t } = useLanguage();
+  const theme = useTheme();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -36,14 +38,14 @@ export default function AlertsOutliers() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div>
-        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{t.alerts.title}</h1>
-        <p style={{ fontSize: '14px', color: '#6B7280', marginTop: '4px' }}>{t.alerts.subtitle}</p>
+        <h1 style={{ fontSize: '22px', fontWeight: '700', color: theme.textPrimary, margin: 0 }}>{t.alerts.title}</h1>
+        <p style={{ fontSize: '14px', color: theme.textSecondary, marginTop: '4px' }}>{t.alerts.subtitle}</p>
       </div>
 
       {!loading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {criticalAlerts.length > 0 && (
-            <div style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ backgroundColor: theme.tintRed, border: `1px solid ${theme.tintRedBorder}`, borderRadius: '8px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2">
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                 <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -54,7 +56,7 @@ export default function AlertsOutliers() {
             </div>
           )}
           {warningAlerts.length > 0 && (
-            <div style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ backgroundColor: theme.tintAmber, border: `1px solid ${theme.tintAmberBorder}`, borderRadius: '8px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2">
                 <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                 <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -67,22 +69,22 @@ export default function AlertsOutliers() {
         </div>
       )}
 
-      <div style={{ backgroundColor: 'white', borderRadius: '12px', border: '1px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E5E7EB', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', color: '#111827', margin: 0 }}>{t.alerts.tableTitle}</h2>
+      <div style={{ backgroundColor: theme.cardBg, borderRadius: '12px', border: `1px solid ${theme.border}`, boxShadow: theme.shadow, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: '600', color: theme.textPrimary, margin: 0 }}>{t.alerts.tableTitle}</h2>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button onClick={() => setFilter('all')} style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: filter === 'all' ? '#F3F4F6' : 'white', color: '#374151', border: '1px solid #E5E7EB' }}>
+            <button onClick={() => setFilter('all')} style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: filter === 'all' ? theme.tableHeadBg : theme.cardBg, color: theme.textSecondary, border: `1px solid ${theme.border}` }}>
               {t.alerts.filterAll(alerts.length)}
             </button>
-            <button onClick={() => setFilter('high')} style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: filter === 'high' ? '#FEF2F2' : 'white', color: '#EF4444', border: `1px solid ${filter === 'high' ? '#FECACA' : '#E5E7EB'}` }}>
+            <button onClick={() => setFilter('high')} style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: filter === 'high' ? theme.tintRed : theme.cardBg, color: '#EF4444', border: `1px solid ${filter === 'high' ? theme.tintRedBorder : theme.border}` }}>
               {t.alerts.filterHigh(highOutliers.length)}
             </button>
-            <button onClick={() => setFilter('low')} style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: filter === 'low' ? '#EFF6FF' : 'white', color: '#2563EB', border: `1px solid ${filter === 'low' ? '#BFDBFE' : '#E5E7EB'}` }}>
+            <button onClick={() => setFilter('low')} style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: filter === 'low' ? theme.accentBg : theme.cardBg, color: theme.accent, border: `1px solid ${filter === 'low' ? theme.accentBorder : theme.border}` }}>
               {t.alerts.filterLow(lowOutliers.length)}
             </button>
             <button
               onClick={() => downloadCSV('larm.csv', filtered.map((a) => ({ sensor_id: a.sensor_id, plats: getSensorDisplayName(a.sensor_id, a.description), value_db: a.value_db, typ: a.alert_type, tidsstampel: a.ts })))}
-              style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: 'white', color: '#374151', border: '1px solid #E5E7EB' }}
+              style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: theme.cardBg, color: theme.textSecondary, border: `1px solid ${theme.border}` }}
             >
               {t.alerts.exportCsv}
             </button>
@@ -90,18 +92,18 @@ export default function AlertsOutliers() {
         </div>
 
         {loading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#6B7280', fontSize: '14px' }}>{t.alerts.loading}</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: theme.textSecondary, fontSize: '14px' }}>{t.alerts.loading}</div>
         ) : error ? (
           <div style={{ padding: '20px', color: '#EF4444', fontSize: '14px' }}>Fel: {error}</div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#6B7280', fontSize: '14px' }}>{t.alerts.noOutliers}</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: theme.textSecondary, fontSize: '14px' }}>{t.alerts.noOutliers}</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
-                <tr style={{ backgroundColor: '#F9FAFB' }}>
+                <tr style={{ backgroundColor: theme.tableHeadBg }}>
                   {[t.alerts.colSensor, t.alerts.colLocation, t.alerts.colReading, t.alerts.colType, t.alerts.colTimestamp, t.alerts.colNotes].map((col) => (
-                    <th key={col} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: '600', color: '#374151', fontSize: '12px', borderBottom: '1px solid #E5E7EB', whiteSpace: 'nowrap' }}>
+                    <th key={col} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: '600', color: theme.textSecondary, fontSize: '12px', borderBottom: `1px solid ${theme.border}`, whiteSpace: 'nowrap' }}>
                       {col}
                     </th>
                   ))}
@@ -110,17 +112,17 @@ export default function AlertsOutliers() {
               <tbody>
                 {filtered.map((alert, idx) => {
                   const color = getNoiseColor(alert.value_db);
-                  const typeBg = alert.alert_type === 'Critical' ? '#FEF2F2' : alert.alert_type === 'High' ? '#FFF7ED' : '#EFF6FF';
-                  const typeColor = alert.alert_type === 'Critical' ? '#EF4444' : alert.alert_type === 'High' ? '#F97316' : '#2563EB';
+                  const typeBg = alert.alert_type === 'Critical' ? theme.tintRed : alert.alert_type === 'High' ? theme.tintOrange : theme.badgeBg;
+                  const typeColor = alert.alert_type === 'Critical' ? '#EF4444' : alert.alert_type === 'High' ? '#F97316' : theme.badgeColor;
                   const typeLabel = alert.alert_type === 'Critical' ? t.alerts.typeCritical : alert.alert_type === 'High' ? t.alerts.typeHigh : t.alerts.typeLow;
                   return (
-                    <tr key={idx} style={{ borderBottom: '1px solid #F3F4F6' }}>
+                    <tr key={idx} style={{ borderBottom: `1px solid ${theme.borderLight}` }}>
                       <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontFamily: 'monospace', fontSize: '12px', backgroundColor: '#EFF6FF', color: '#2563EB', padding: '2px 6px', borderRadius: '4px' }}>
+                        <span style={{ fontFamily: 'monospace', fontSize: '12px', backgroundColor: theme.badgeBg, color: theme.badgeColor, padding: '2px 6px', borderRadius: '4px' }}>
                           {alert.sensor_id}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 16px', color: '#374151' }}>{getSensorDisplayName(alert.sensor_id, alert.description)}</td>
+                      <td style={{ padding: '12px 16px', color: theme.textSecondary }}>{getSensorDisplayName(alert.sensor_id, alert.description)}</td>
                       <td style={{ padding: '12px 16px' }}>
                         <span style={{ fontWeight: '700', fontSize: '15px', color }}>{alert.value_db.toFixed(1)} dB</span>
                       </td>
@@ -129,8 +131,8 @@ export default function AlertsOutliers() {
                           {typeLabel}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 16px', color: '#6B7280', whiteSpace: 'nowrap' }}>{new Date(alert.ts).toLocaleString('sv-SE')}</td>
-                      <td style={{ padding: '12px 16px', color: '#9CA3AF', fontSize: '12px' }}>—</td>
+                      <td style={{ padding: '12px 16px', color: theme.textSecondary, whiteSpace: 'nowrap' }}>{new Date(alert.ts).toLocaleString('sv-SE')}</td>
+                      <td style={{ padding: '12px 16px', color: theme.textMuted, fontSize: '12px' }}>—</td>
                     </tr>
                   );
                 })}

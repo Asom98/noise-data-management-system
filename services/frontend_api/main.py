@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
+from typing import Optional
+from datetime import datetime, timezone
 
 app = FastAPI(
     title="Malmö Noise Dashboard API",
@@ -77,16 +79,24 @@ def get_db_summary():
 @app.get("/api/db/raw")
 def get_raw_measurements(
     sensor_id: str = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
+    from_dt: Optional[str] = Query(default=None),
+    to_dt: Optional[str] = Query(default=None),
 ):
-    """Returns paginated raw measurements, optionally filtered by sensor."""
+    """Returns paginated raw measurements, optionally filtered by sensor and date range."""
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        where = "WHERE m.sensor_id = %s" if sensor_id else ""
-        params = [sensor_id] if sensor_id else []
+        conditions, params = [], []
+        if sensor_id:
+            conditions.append("m.sensor_id = %s"); params.append(sensor_id)
+        if from_dt:
+            conditions.append("m.ts >= %s::timestamptz"); params.append(from_dt)
+        if to_dt:
+            conditions.append("m.ts <= %s::timestamptz"); params.append(to_dt)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
         cursor.execute(f"""
             SELECT m.ts, m.sensor_id, s.description, m.value_db, m.unit, m.quality_flag
@@ -96,7 +106,6 @@ def get_raw_measurements(
             ORDER BY m.ts DESC
             LIMIT %s OFFSET %s;
         """, params + [limit, offset])
-
         rows = cursor.fetchall()
 
         cursor.execute(f"SELECT COUNT(*) as total FROM noise_measurements m {where};", params)
@@ -156,18 +165,31 @@ def get_latest_measurements():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/measurements/history")
-def get_historical_measurements(hours: int = Query(default=1, ge=1, le=168)):
-    """Returns noise data averaged by time bucket. 1h uses 1-min buckets, >1h uses 1-hour buckets."""
+def get_historical_measurements(
+    hours: int = Query(default=1, ge=1, le=8760),
+    from_dt: Optional[str] = Query(default=None),
+    to_dt: Optional[str] = Query(default=None),
+):
+    """Returns noise data averaged by time bucket, supports hours or explicit date range."""
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        if hours == 1:
-            bucket = '1 minute'
-            time_format = '%H:%M'
+        if from_dt and to_dt:
+            dt_from = datetime.fromisoformat(from_dt.replace('Z', '+00:00'))
+            dt_to   = datetime.fromisoformat(to_dt.replace('Z', '+00:00'))
+            span_h  = max(1, (dt_to - dt_from).total_seconds() / 3600)
+            where_clause = "m.ts >= %(from_dt)s::timestamptz AND m.ts <= %(to_dt)s::timestamptz"
+            q_params = {'from_dt': from_dt, 'to_dt': to_dt}
         else:
-            bucket = '1 hour'
-            time_format = '%m/%d %H:%M'
+            span_h = hours
+            where_clause = f"m.ts >= NOW() - INTERVAL '{hours} HOURS'"
+            q_params = None
+
+        if span_h <= 2:    bucket = '1 minute'
+        elif span_h <= 12: bucket = '5 minutes'
+        elif span_h <= 72: bucket = '1 hour'
+        else:              bucket = '6 hours'
 
         cursor.execute(f"""
             SELECT
@@ -178,27 +200,44 @@ def get_historical_measurements(hours: int = Query(default=1, ge=1, le=168)):
                 ROUND(MAX(m.value_db)::numeric, 1) as max_db
             FROM noise_measurements m
             LEFT JOIN sensors s ON m.sensor_id = s.sensor_id
-            WHERE m.ts >= NOW() - INTERVAL '{hours} HOURS'
+            WHERE {where_clause}
             GROUP BY time_block, m.sensor_id, s.description
             ORDER BY time_block ASC;
-        """)
+        """, q_params)
 
         measurements = cursor.fetchall()
+
+        # Fetch all registered sensors so every sensor appears in the chart
+        # even if it has no readings in the requested window.
+        cursor.execute("SELECT sensor_id FROM sensors WHERE lat IS NOT NULL ORDER BY sensor_id;")
+        all_labels = [r['sensor_id'][:25] for r in cursor.fetchall()]
         conn.close()
 
+        # Return ISO timestamps — the frontend converts to local time so the
+        # chart labels are never displayed in the wrong timezone.
         history_dict = {}
         for row in measurements:
-            time_str = row['time_block'].strftime(time_format)
-            # Use sensor_id as the chart series key to ensure uniqueness.
+            time_key = row['time_block'].isoformat()
             label = row['sensor_id'][:25]
 
-            if time_str not in history_dict:
-                history_dict[time_str] = {"time": time_str}
+            if time_key not in history_dict:
+                history_dict[time_key] = {"time": time_key}
 
-            history_dict[time_str][f"avg__{label}"] = float(row['avg_db'])
-            history_dict[time_str][f"max__{label}"] = float(row['max_db'])
+            history_dict[time_key][f"avg__{label}"] = float(row['avg_db']) if row['avg_db'] is not None else None
+            history_dict[time_key][f"max__{label}"] = float(row['max_db']) if row['max_db'] is not None else None
 
-        return list(history_dict.values())
+        result = list(history_dict.values())
+
+        # Guarantee every sensor key exists in at least the first row so the
+        # frontend legend always shows all sensors regardless of data gaps.
+        if result:
+            first = result[0]
+            for label in all_labels:
+                if f"avg__{label}" not in first:
+                    first[f"avg__{label}"] = None
+                    first[f"max__{label}"] = None
+
+        return result
 
     except Exception as e:
         print(f"Error: {e}")
@@ -215,19 +254,22 @@ def get_stats():
         cursor.execute("SELECT COUNT(*) as count FROM sensors WHERE lat IS NOT NULL;")
         active_sensors = cursor.fetchone()['count']
 
-        # Average noise from latest reading per sensor
+        # Max noise from latest reading per sensor (and which sensor)
         cursor.execute("""
-            SELECT ROUND(AVG(value_db)::numeric, 1) as avg_db
+            SELECT sensor_id, ROUND(value_db::numeric, 1) as max_db
             FROM (
-                SELECT DISTINCT ON (sensor_id) value_db
+                SELECT DISTINCT ON (sensor_id) sensor_id, value_db
                 FROM noise_measurements
                 ORDER BY sensor_id, ts DESC
-            ) latest;
+            ) latest
+            ORDER BY value_db DESC
+            LIMIT 1;
         """)
         row = cursor.fetchone()
-        avg_noise_db = float(row['avg_db']) if row['avg_db'] is not None else 0.0
+        max_noise_db = float(row['max_db']) if row and row['max_db'] is not None else 0.0
+        max_noise_sensor_id = row['sensor_id'] if row else None
 
-        # Active alerts: latest readings > 70 dB
+        # Active alerts: latest readings >= 80 dB (Warning) or >= 90 dB (Critical)
         cursor.execute("""
             SELECT COUNT(*) as count
             FROM (
@@ -235,7 +277,7 @@ def get_stats():
                 FROM noise_measurements
                 ORDER BY sensor_id, ts DESC
             ) latest
-            WHERE value_db > 70;
+            WHERE value_db >= 80;
         """)
         active_alerts = cursor.fetchone()['count']
 
@@ -255,7 +297,8 @@ def get_stats():
         conn.close()
         return {
             "active_sensors": active_sensors,
-            "avg_noise_db": avg_noise_db,
+            "max_noise_db": max_noise_db,
+            "max_noise_sensor_id": max_noise_sensor_id,
             "active_alerts": active_alerts,
             "sensor_health_pct": sensor_health_pct
         }
@@ -264,12 +307,23 @@ def get_stats():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/alerts")
-def get_alerts():
-    """Returns last 24h readings where value_db > 70 or value_db < 10, joined with sensor info."""
+def get_alerts(
+    from_dt: Optional[str] = Query(default=None),
+    to_dt: Optional[str] = Query(default=None),
+):
+    """Returns alert readings (≥80 dB or <25 dB). Defaults to last 24h; supports date range."""
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("""
+
+        if from_dt and to_dt:
+            time_filter = "m.ts >= %(from_dt)s::timestamptz AND m.ts <= %(to_dt)s::timestamptz"
+            q_params = {'from_dt': from_dt, 'to_dt': to_dt}
+        else:
+            time_filter = "m.ts >= NOW() - INTERVAL '24 HOURS'"
+            q_params = None
+
+        cursor.execute(f"""
             SELECT
                 m.ts,
                 m.sensor_id,
@@ -277,17 +331,17 @@ def get_alerts():
                 m.quality_flag,
                 s.description,
                 CASE
-                    WHEN m.value_db > 80 THEN 'Critical'
-                    WHEN m.value_db > 70 THEN 'High'
-                    WHEN m.value_db < 10 THEN 'Low'
+                    WHEN m.value_db >= 90 THEN 'Critical'
+                    WHEN m.value_db >= 80 THEN 'High'
+                    WHEN m.value_db < 25  THEN 'Low'
                 END as alert_type
             FROM noise_measurements m
             LEFT JOIN sensors s ON m.sensor_id = s.sensor_id
-            WHERE m.ts >= NOW() - INTERVAL '24 HOURS'
-              AND (m.value_db > 70 OR m.value_db < 10)
+            WHERE {time_filter}
+              AND (m.value_db >= 80 OR m.value_db < 25)
             ORDER BY m.ts DESC
-            LIMIT 200;
-        """)
+            LIMIT 500;
+        """, q_params)
         alerts = cursor.fetchall()
         conn.close()
         # Convert timestamps to strings for JSON serialisation
@@ -345,65 +399,179 @@ def get_report_data():
 
 @app.get("/api/sensors/health")
 def get_sensor_health():
-    """Returns per-sensor health status with last_seen, battery placeholder, signal placeholder."""
+    """
+    Returns per-sensor health metrics based on Data Availability Rate (DAR).
+
+    DAR = observed readings in the last 24 h / expected readings (1 440 at 60-second poll interval).
+    Max Gap = longest consecutive silence between readings in the last 24 h (minutes).
+
+    Status classification:
+      Operational — DAR >= 80 %
+      Warning     — DAR 40–80 %
+      Critical    — DAR < 40 % or no data in last 24 h
+    """
     try:
         conn = get_db()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # One query:
+        # - gap_data CTE: compute inter-reading gaps per sensor over the last 24 h
+        # - health CTE: aggregate readings count + max gap per sensor
+        # - outer query: join with sensors table for metadata + last_seen
         cursor.execute("""
+            WITH gap_data AS (
+                SELECT
+                    sensor_id,
+                    ts,
+                    LAG(ts) OVER (PARTITION BY sensor_id ORDER BY ts) AS prev_ts
+                FROM noise_measurements
+                WHERE ts >= NOW() - INTERVAL '24 hours'
+            ),
+            health AS (
+                SELECT
+                    sensor_id,
+                    COUNT(*) AS readings_24h,
+                    MAX(
+                        EXTRACT(EPOCH FROM (ts - prev_ts)) / 60.0
+                    ) AS max_gap_minutes
+                FROM gap_data
+                GROUP BY sensor_id
+            )
             SELECT
                 s.sensor_id,
                 s.description,
-                MAX(m.ts) as last_seen
+                MAX(m.ts)              AS last_seen,
+                COALESCE(h.readings_24h, 0)       AS readings_24h,
+                h.max_gap_minutes
             FROM sensors s
             LEFT JOIN noise_measurements m ON s.sensor_id = m.sensor_id
-            GROUP BY s.sensor_id, s.description
+            LEFT JOIN health h ON s.sensor_id = h.sensor_id
+            GROUP BY s.sensor_id, s.description, h.readings_24h, h.max_gap_minutes
             ORDER BY s.sensor_id;
         """)
         rows = cursor.fetchall()
         conn.close()
 
-        from datetime import datetime, timezone
+        # Yggio sensors push a new timestamped value approximately every 5 minutes.
+        # Our ingester polls every 60 s but only stores rows when the timestamp changes.
+        # Expected readings per sensor per 24 h = 24 * 60 / 5 = 288.
+        EXPECTED_PER_DAY = 288
 
         result = []
         for row in rows:
             last_seen = row['last_seen']
-            if last_seen is None:
+            if last_seen and last_seen.tzinfo is None:
+                last_seen = last_seen.replace(tzinfo=timezone.utc)
+
+            readings = int(row['readings_24h'])
+            # Cap at 100 % in case of duplicate ingestion bursts
+            availability_pct = round(min(readings / EXPECTED_PER_DAY * 100, 100.0), 1)
+
+            max_gap = row['max_gap_minutes']
+            max_gap_minutes = round(float(max_gap), 1) if max_gap is not None else None
+
+            if readings == 0:
                 status = 'Critical'
-                minutes_ago = None
+            elif availability_pct >= 80:
+                status = 'Operational'
+            elif availability_pct >= 40:
+                status = 'Warning'
             else:
-                # Make sure last_seen is timezone-aware
-                if last_seen.tzinfo is None:
-                    last_seen = last_seen.replace(tzinfo=timezone.utc)
-                now = datetime.now(timezone.utc)
-                minutes_ago = (now - last_seen).total_seconds() / 60
-                if minutes_ago <= 15:
-                    status = 'Operational'
-                elif minutes_ago <= 60:
-                    status = 'Warning'
-                else:
-                    status = 'Critical'
-
-            # Deterministic battery placeholder: 55–94%
-            battery_pct = sum(ord(c) for c in row['sensor_id']) % 40 + 55
-
-            # Signal based on status
-            if status == 'Operational':
-                signal = 'Strong'
-            elif status == 'Warning':
-                signal = 'Moderate'
-            else:
-                signal = 'Weak'
+                status = 'Critical'
 
             result.append({
                 "sensor_id": row['sensor_id'],
                 "description": row['description'],
                 "last_seen": last_seen.isoformat() if last_seen else None,
                 "status": status,
-                "battery_pct": battery_pct,
-                "signal": signal
+                "availability_pct": availability_pct,
+                "readings_24h": readings,
+                "max_gap_minutes": max_gap_minutes,
             })
 
         return result
     except Exception as e:
         print(f"Error in /api/sensors/health: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sensors/acoustic")
+def get_acoustic_sensors():
+    """Returns only sensors that have at least one row with LAeq, LAmax, and LAmin data."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT DISTINCT m.sensor_id, s.description
+            FROM noise_measurements m
+            LEFT JOIN sensors s ON m.sensor_id = s.sensor_id
+            WHERE m.laeq IS NOT NULL
+              AND m.lamax IS NOT NULL
+              AND m.lamin IS NOT NULL
+            ORDER BY m.sensor_id;
+        """)
+        rows = cursor.fetchall()
+        conn.close()
+        return [{"sensor_id": r["sensor_id"], "description": r["description"]} for r in rows]
+    except Exception as e:
+        print(f"Error in /api/sensors/acoustic: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/measurements/acoustic")
+def get_acoustic_history(
+    sensor_id: str = Query(...),
+    hours: int = Query(default=1, ge=1, le=8760),
+    from_dt: Optional[str] = Query(default=None),
+    to_dt: Optional[str] = Query(default=None),
+):
+    """Returns time-bucketed LAeq, LAmax, LAmin. Supports hours or explicit date range."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        if from_dt and to_dt:
+            dt_from = datetime.fromisoformat(from_dt.replace('Z', '+00:00'))
+            dt_to   = datetime.fromisoformat(to_dt.replace('Z', '+00:00'))
+            span_h  = max(1, (dt_to - dt_from).total_seconds() / 3600)
+            time_filter = "ts >= %(from_dt)s::timestamptz AND ts <= %(to_dt)s::timestamptz"
+            q_params = {'sensor_id': sensor_id, 'from_dt': from_dt, 'to_dt': to_dt}
+        else:
+            span_h = hours
+            time_filter = f"ts >= NOW() - INTERVAL '{hours} HOURS'"
+            q_params = {'sensor_id': sensor_id}
+
+        if span_h <= 2:    bucket = '1 minute'
+        elif span_h <= 12: bucket = '5 minutes'
+        elif span_h <= 72: bucket = '1 hour'
+        else:              bucket = '6 hours'
+
+        cursor.execute(f"""
+            SELECT
+                time_bucket('{bucket}', ts) AS time_block,
+                ROUND(AVG(laeq)::numeric, 1) AS laeq,
+                ROUND(MAX(lamax)::numeric, 1) AS lamax,
+                ROUND(MIN(lamin)::numeric, 1) AS lamin
+            FROM noise_measurements
+            WHERE sensor_id = %(sensor_id)s
+              AND {time_filter}
+              AND laeq IS NOT NULL AND lamax IS NOT NULL AND lamin IS NOT NULL
+            GROUP BY time_block
+            ORDER BY time_block ASC;
+        """, q_params)
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [
+            {
+                "time": row["time_block"].strftime("%H:%M" if hours <= 6 else "%m/%d %H:%M"),
+                "laeq": float(row["laeq"]) if row["laeq"] is not None else None,
+                "lamax": float(row["lamax"]) if row["lamax"] is not None else None,
+                "lamin": float(row["lamin"]) if row["lamin"] is not None else None,
+            }
+            for row in rows
+        ]
+    except Exception as e:
+        print(f"Error in /api/measurements/acoustic: {e}")
         raise HTTPException(status_code=500, detail=str(e))

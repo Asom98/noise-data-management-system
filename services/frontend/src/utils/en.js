@@ -130,7 +130,7 @@ const en = {
     colStatus: 'Status',
     colLastSeen: 'Last seen',
     colReadings: 'Readings (24 h)',
-    availabilityHint: 'Data Availability Rate — observed / expected readings in last 24 h (288 at 5-minute Yggio update interval)',
+    availabilityHint: 'Data Availability Rate — observed readings in last 24 h vs. expected count derived from this sensor\'s median inter-reading gap over the last 30 days',
     maxGapHint: 'Longest consecutive silence between readings in the last 24 h',
     never: 'Never',
     loading: 'Loading...',

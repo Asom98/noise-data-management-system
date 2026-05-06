@@ -414,10 +414,16 @@ def get_sensor_health():
         conn = get_db()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # One query:
-        # - gap_data CTE: compute inter-reading gaps per sensor over the last 24 h
-        # - health CTE: aggregate readings count + max gap per sensor
-        # - outer query: join with sensors table for metadata + last_seen
+        # One query with three CTEs:
+        # - gap_data:   inter-reading gaps per sensor over the last 24 h
+        # - health:     readings count + max gap per sensor
+        # - median_gap: median normal inter-reading gap over the last 30 days
+        #               (gaps > 3600 s are excluded — those are outages, not the
+        #               sensor's natural reporting interval)
+        #   expected_per_day = 86400 / median_gap_s
+        #   This baseline is stable: it reflects the sensor's hardware-level cadence
+        #   and does NOT drift down when the sensor degrades, so DAR will correctly
+        #   fall when readings are missed.
         cursor.execute("""
             WITH gap_data AS (
                 SELECT
@@ -436,26 +442,40 @@ def get_sensor_health():
                     ) AS max_gap_minutes
                 FROM gap_data
                 GROUP BY sensor_id
+            ),
+            all_gaps AS (
+                SELECT
+                    sensor_id,
+                    EXTRACT(EPOCH FROM (ts - LAG(ts) OVER (
+                        PARTITION BY sensor_id ORDER BY ts
+                    ))) AS gap_s
+                FROM noise_measurements
+                WHERE ts >= NOW() - INTERVAL '30 days'
+            ),
+            median_gap AS (
+                SELECT
+                    sensor_id,
+                    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY gap_s) AS median_gap_s
+                FROM all_gaps
+                WHERE gap_s BETWEEN 60 AND 3600
+                GROUP BY sensor_id
             )
             SELECT
                 s.sensor_id,
                 s.description,
-                MAX(m.ts)              AS last_seen,
-                COALESCE(h.readings_24h, 0)       AS readings_24h,
-                h.max_gap_minutes
+                MAX(m.ts)                        AS last_seen,
+                COALESCE(h.readings_24h, 0)      AS readings_24h,
+                h.max_gap_minutes,
+                86400.0 / NULLIF(mg.median_gap_s, 0) AS expected_per_day
             FROM sensors s
-            LEFT JOIN noise_measurements m ON s.sensor_id = m.sensor_id
-            LEFT JOIN health h ON s.sensor_id = h.sensor_id
-            GROUP BY s.sensor_id, s.description, h.readings_24h, h.max_gap_minutes
+            LEFT JOIN noise_measurements m  ON s.sensor_id = m.sensor_id
+            LEFT JOIN health h              ON s.sensor_id = h.sensor_id
+            LEFT JOIN median_gap mg         ON s.sensor_id = mg.sensor_id
+            GROUP BY s.sensor_id, s.description, h.readings_24h, h.max_gap_minutes, mg.median_gap_s
             ORDER BY s.sensor_id;
         """)
         rows = cursor.fetchall()
         conn.close()
-
-        # Yggio sensors push a new timestamped value approximately every 5 minutes.
-        # Our ingester polls every 60 s but only stores rows when the timestamp changes.
-        # Expected readings per sensor per 24 h = 24 * 60 / 5 = 288.
-        EXPECTED_PER_DAY = 288
 
         result = []
         for row in rows:
@@ -464,8 +484,10 @@ def get_sensor_health():
                 last_seen = last_seen.replace(tzinfo=timezone.utc)
 
             readings = int(row['readings_24h'])
-            # Cap at 100 % in case of duplicate ingestion bursts
-            availability_pct = round(min(readings / EXPECTED_PER_DAY * 100, 100.0), 1)
+            # expected_per_day derived from the sensor's median normal reporting interval.
+            # Fall back to 1440 (one per minute) for sensors with < 30 days of history.
+            expected = float(row['expected_per_day']) if row['expected_per_day'] else 1440.0
+            availability_pct = round(min(readings / expected * 100, 100.0), 1)
 
             max_gap = row['max_gap_minutes']
             max_gap_minutes = round(float(max_gap), 1) if max_gap is not None else None
@@ -487,6 +509,7 @@ def get_sensor_health():
                 "availability_pct": availability_pct,
                 "readings_24h": readings,
                 "max_gap_minutes": max_gap_minutes,
+                "expected_per_day": round(expected),
             })
 
         return result

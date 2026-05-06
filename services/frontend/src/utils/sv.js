@@ -130,7 +130,7 @@ const sv = {
     colStatus: 'Status',
     colLastSeen: 'Senast sedd',
     colReadings: 'Mätningar (24 h)',
-    availabilityHint: 'Datatillgänglighetsgrad — observerade / förväntade mätningar senaste 24 h (288 vid 5-minuters Yggio-uppdateringsintervall)',
+    availabilityHint: 'Datatillgänglighetsgrad — observerade mätningar senaste 24 h jämfört med förväntat antal baserat på sensorns medianintervall för rapportering de senaste 30 dagarna',
     maxGapHint: 'Längsta sammanhängande tystnad mellan mätningar senaste 24 h',
     never: 'Aldrig',
     loading: 'Laddar...',

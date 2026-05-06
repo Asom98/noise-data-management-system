@@ -163,7 +163,7 @@ export default function SensorHealth() {
 
       {/* Methodology note */}
       <div style={{ backgroundColor: theme.accentBg, border: `1px solid ${theme.accentBorder}`, borderRadius: '10px', padding: '12px 16px', fontSize: '12px', color: theme.accentText, lineHeight: 1.6 }}>
-        <b>How health is measured:</b> Status is derived from the <b>Data Availability Rate (DAR)</b> — the ratio of observed readings to the 288 readings expected per sensor per 24 hours (one per 5-minute Yggio update cycle).
+        <b>How health is measured:</b> Status is derived from the <b>Data Availability Rate (DAR)</b> — observed readings in the last 24 h divided by each sensor's expected daily count, which is derived from its median inter-reading gap over the last 30 days (outage-length silences excluded).
         DAR ≥ {settings.darOperationalMin} % → <b>Operational</b> · DAR {settings.darWarningMin}–{settings.darOperationalMin} % → <b>Degraded</b> · DAR &lt; {settings.darWarningMin} % or no data → <b>Poor</b>.
         Thresholds are configurable in <b>Settings → Dashboard</b>. The <b>Max Gap</b> column shows the longest consecutive silence in the last 24 h.
       </div>

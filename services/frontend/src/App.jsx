@@ -10,7 +10,6 @@ import SensorHealth from './pages/SensorHealth';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import DatabaseExplorer from './pages/DatabaseExplorer';
-import AcousticMetrics from './pages/AcousticMetrics';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { SettingsProvider, useSettings, useTheme } from './context/SettingsContext';
 
@@ -109,7 +108,6 @@ export default function App() {
             <Route path="/reports"       element={<Layout><Reports /></Layout>} />
             <Route path="/settings"      element={<Layout><Settings /></Layout>} />
             <Route path="/database"      element={<Layout><DatabaseExplorer /></Layout>} />
-            <Route path="/acoustic"      element={<Layout><AcousticMetrics /></Layout>} />
             <Route path="/notifications" element={<Layout><PlaceholderPage titleKey="notifications" descKey="notificationsDesc" /></Layout>} />
             <Route path="/system"        element={<Layout><PlaceholderPage titleKey="system" descKey="systemDesc" /></Layout>} />
             <Route path="*"              element={<Layout><Overview /></Layout>} />

@@ -9,7 +9,6 @@ const sv = {
     liveReadings: 'Livemätningar',
     alerts: 'Larm & Avvikelser',
     sensorHealth: 'Sensorhälsa',
-    acousticMetrics: 'Akustiska mätvärden',
     reports: 'Rapporter',
     settings: 'Inställningar',
     notifications: 'Notifikationer',
@@ -148,7 +147,6 @@ const sv = {
     sensor: 'Sensor',
     allSensors: 'Alla sensorer',
     noFiltersNeeded: 'Inga filter krävs för denna rapporttyp.',
-    noAcousticSensors: 'Inga sensorer med LAeq / LAmax / LAmin-data tillgängliga ännu.',
     loading: 'Laddar data…',
     noData: 'Ingen data hittades för valda filter.',
     rowsReady: 'rader redo att exportera',
@@ -159,14 +157,12 @@ const sv = {
       alerts:       'Larm & Avvikelser',
       sensorHealth: 'Sensorhälsa',
       rawReadings:  'Rådata',
-      acoustic:     'Akustiska mätvärden',
     },
     descs: {
       summary:      'Totaler, snitt och spann per sensor',
       alerts:       'Alla mätningar ≥ 80 dB eller < 25 dB senaste 24 h',
       sensorHealth: 'Status, batteri och senast sedd för varje sensor',
       rawReadings:  'Upp till 500 råmätningar (alla eller en sensor)',
-      acoustic:     'LAeq, LAmax, LAmin tidsserie för en sensor',
     },
   },
 
@@ -214,20 +210,6 @@ const sv = {
     cancel: 'Avbryt',
     saveChanges: 'Spara ändringar',
     saved: 'Sparat!',
-  },
-
-  // Acoustic Metrics page
-  acousticMetrics: {
-    title: 'Akustiska mätvärden',
-    subtitle: 'LAeq · LAmax · LAmin — per sensor, över tid. Endast sensorer som rapporterar alla tre visas.',
-    loadingSensors: 'Söker efter sensorer med akustisk data...',
-    noSensorsTitle: 'Ingen akustisk mätdata tillgänglig ännu',
-    noSensorsDesc: 'Sensorer måste rapportera LAeq, LAmax och LAmin via Yggio API. När data anländer visas den här automatiskt.',
-    sensor: 'Sensor',
-    sensorsWithData: 'sensorer med akustisk data',
-    loadingData: 'Laddar akustisk data...',
-    noDataInRange: 'Ingen data i valt tidsintervall',
-    dragHint: 'Dra vänster/höger för att panorera · Scrolla för att zooma · Dra upp/ned för att flytta Y-axeln',
   },
 
   // Noise level labels (used in noise.js getNoiseLevelLabel)

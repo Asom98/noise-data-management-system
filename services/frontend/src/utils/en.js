@@ -9,7 +9,6 @@ const en = {
     liveReadings: 'Live Readings',
     alerts: 'Alerts & Outliers',
     sensorHealth: 'Sensor Health',
-    acousticMetrics: 'Acoustic Metrics',
     reports: 'Reports',
     settings: 'Settings',
     notifications: 'Notifications',
@@ -148,7 +147,6 @@ const en = {
     sensor: 'Sensor',
     allSensors: 'All sensors',
     noFiltersNeeded: 'No filters required for this report type.',
-    noAcousticSensors: 'No sensors with LAeq / LAmax / LAmin data available yet.',
     loading: 'Loading data…',
     noData: 'No data found for the selected filters.',
     rowsReady: 'rows ready to export',
@@ -159,14 +157,12 @@ const en = {
       alerts:       'Alerts & Outliers',
       sensorHealth: 'Sensor Health',
       rawReadings:  'Raw Readings',
-      acoustic:     'Acoustic Metrics',
     },
     descs: {
       summary:      'Totals, averages and ranges per sensor',
       alerts:       'All readings ≥ 80 dB or < 25 dB in the last 24 h',
       sensorHealth: 'Status, battery and last-seen for every sensor',
       rawReadings:  'Up to 500 raw measurements (all or one sensor)',
-      acoustic:     'LAeq, LAmax, LAmin time series for one sensor',
     },
   },
 
@@ -214,20 +210,6 @@ const en = {
     cancel: 'Cancel',
     saveChanges: 'Save changes',
     saved: 'Saved!',
-  },
-
-  // Acoustic Metrics page
-  acousticMetrics: {
-    title: 'Acoustic Metrics',
-    subtitle: 'LAeq · LAmax · LAmin — per sensor, over time. Only sensors reporting all three metrics are shown.',
-    loadingSensors: 'Searching for sensors with acoustic data...',
-    noSensorsTitle: 'No acoustic metric data available yet',
-    noSensorsDesc: 'Sensors must report LAeq, LAmax, and LAmin fields via the Yggio API. Once data arrives it will appear here automatically.',
-    sensor: 'Sensor',
-    sensorsWithData: 'sensors with acoustic data',
-    loadingData: 'Loading acoustic data...',
-    noDataInRange: 'No data in selected time range',
-    dragHint: 'Drag left/right to pan · Scroll to zoom · Drag up/down to shift Y-axis',
   },
 
   // Noise level labels

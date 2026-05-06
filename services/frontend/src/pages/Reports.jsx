@@ -44,10 +44,6 @@ const REPORT_TYPES = [
     id: 'rawReadings',
     icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
   },
-  {
-    id: 'acoustic',
-    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/></svg>,
-  },
 ];
 
 const PRESETS = [
@@ -136,19 +132,6 @@ async function fetchRawReadings(sensorId, from_dt, to_dt) {
     rows,
     columns: ['sensor_id', 'location', 'value_db', 'unit', 'quality_flag', 'timestamp'],
     headers: ['Sensor ID', 'Location', 'Reading (dB)', 'Unit', 'Quality', 'Timestamp'],
-  };
-}
-
-async function fetchAcoustic(sensorId, from_dt, to_dt) {
-  if (!sensorId || sensorId === 'none') return null;
-  const res = await axios.get(`${API_BASE}/api/measurements/acoustic`, {
-    params: { sensor_id: sensorId, from_dt, to_dt },
-  });
-  const rows = res.data.map(r => ({ time: r.time, laeq: r.laeq, lamax: r.lamax, lamin: r.lamin }));
-  return {
-    rows,
-    columns: ['time', 'laeq', 'lamax', 'lamin'],
-    headers: ['Time', 'LAeq (dB)', 'LAmax (dB)', 'LAmin (dB)'],
   };
 }
 
@@ -254,41 +237,12 @@ function buildRawReadingsOption(rows, theme) {
   };
 }
 
-function buildAcousticOption(rows, theme) {
-  const labels = rows.map(r => r.time);
-  const cfg = [
-    { key: 'laeq', name: 'LAeq', color: '#2563EB' },
-    { key: 'lamax', name: 'LAmax', color: '#EF4444' },
-    { key: 'lamin', name: 'LAmin', color: '#10B981' },
-  ];
-  return {
-    tooltip: {
-      trigger: 'axis',
-      formatter: params => `<b>${params[0]?.axisValue}</b><br/>` +
-        params.map(p => `${p.marker}<b>${p.seriesName}</b>: ${p.value ?? '—'} dB`).join('<br/>'),
-    },
-    legend: { bottom: 0, textStyle: { fontSize: 11, color: theme.chartAxis } },
-    grid: { top: 10, right: 20, bottom: 50, left: 20, containLabel: true },
-    dataZoom: [{ type: 'inside', xAxisIndex: 0 }, { type: 'slider', xAxisIndex: 0, bottom: 4, height: 18 }],
-    xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10, color: theme.chartAxis }, splitLine: { lineStyle: { color: theme.chartGrid } } },
-    yAxis: { type: 'value', axisLabel: { formatter: v => `${Math.round(v)} dB`, fontSize: 11, color: theme.chartAxis }, splitLine: { lineStyle: { color: theme.chartGrid } }, min: v => Math.max(0, Math.floor(v.min - 5)), max: v => Math.ceil(v.max + 5) },
-    series: cfg.map(c => ({
-      name: c.name, type: 'line',
-      data: rows.map(r => r[c.key] ?? null),
-      lineStyle: { color: c.color, width: 2.5 },
-      itemStyle: { color: c.color },
-      symbol: 'circle', symbolSize: 5, smooth: false,
-    })),
-  };
-}
-
 function getChartOption(type, rows, theme) {
   if (!rows || rows.length === 0) return null;
   if (type === 'summary')      return buildSummaryOption(rows, theme);
   if (type === 'alerts')       return buildAlertsOption(rows, theme);
   if (type === 'sensorHealth') return buildSensorHealthOption(rows, theme);
   if (type === 'rawReadings')  return buildRawReadingsOption(rows, theme);
-  if (type === 'acoustic')     return buildAcousticOption(rows, theme);
   return null;
 }
 
@@ -479,19 +433,16 @@ export default function Reports() {
   const [range, setRange]                 = useState(() => defaultRange(24));
   const [sensorId, setSensorId]           = useState('all');
   const [allSensors, setAllSensors]       = useState([]);
-  const [acousticSensors, setAcousticSensors] = useState([]);
   const [result, setResult]               = useState(null);
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState(null);
 
   useEffect(() => {
     axios.get(`${API_BASE}/api/sensors`).then(r => setAllSensors(r.data)).catch(() => {});
-    axios.get(`${API_BASE}/api/sensors/acoustic`).then(r => setAcousticSensors(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (reportType === 'acoustic') setSensorId(acousticSensors.length > 0 ? acousticSensors[0].sensor_id : 'none');
-    else setSensorId('all');
+    setSensorId('all');
     setResult(null); setError(null);
   }, [reportType]);
 
@@ -508,7 +459,6 @@ export default function Reports() {
         else if (reportType === 'alerts')      data = await fetchAlerts(from, to);
         else if (reportType === 'sensorHealth') data = await fetchSensorHealth();
         else if (reportType === 'rawReadings') data = await fetchRawReadings(sensorId, from, to);
-        else if (reportType === 'acoustic')    data = await fetchAcoustic(sensorId, from, to);
         if (!cancelled) setResult(data);
       } catch (e) {
         if (!cancelled) setError(e.message);
@@ -546,9 +496,9 @@ export default function Reports() {
     doc.save(`malmo-noise-${reportType}-${new Date().toISOString().slice(0, 10)}.pdf`);
   }
 
-  const needsSensor   = reportType === 'rawReadings' || reportType === 'acoustic';
+  const needsSensor   = reportType === 'rawReadings';
   const noTimeFilter  = reportType === 'sensorHealth' || reportType === 'summary';
-  const sensorList    = reportType === 'acoustic' ? acousticSensors : allSensors;
+  const sensorList    = allSensors;
   const chartOption   = result ? getChartOption(reportType, result.rows, theme) : null;
 
   return (
@@ -561,7 +511,7 @@ export default function Reports() {
       {/* Step 1 — Report type */}
       <Card>
         <StepLabel n="1" label={t.reports.step1} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
           {REPORT_TYPES.map(rt => {
             const active = reportType === rt.id;
             return (
@@ -648,10 +598,6 @@ export default function Reports() {
           {!loading && !error && result && result.rows.length === 0 && (
             <div style={{ textAlign: 'center', color: theme.textMuted, padding: '60px 0', fontSize: '14px' }}>{t.reports.noData}</div>
           )}
-          {!loading && !error && !result && reportType === 'acoustic' && acousticSensors.length === 0 && (
-            <p style={{ fontSize: '13px', color: theme.textMuted, textAlign: 'center', padding: '40px 0' }}>{t.reports.noAcousticSensors}</p>
-          )}
-
           {!loading && !error && result && result.rows.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 

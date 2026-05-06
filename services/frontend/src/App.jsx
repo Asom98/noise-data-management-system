@@ -10,6 +10,9 @@ import SensorHealth from './pages/SensorHealth';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import DatabaseExplorer from './pages/DatabaseExplorer';
+import Admin from './pages/Admin';
+import Login from './pages/Login';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { SettingsProvider, useSettings, useTheme } from './context/SettingsContext';
 
@@ -92,28 +95,46 @@ function Layout({ children }) {
   );
 }
 
+// ─── AppRoutes (auth-aware) ───────────────────────────────────────────────────
+
+function AppRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <div style={{ minHeight: '100vh', backgroundColor: '#F3F4F6' }} />;
+  if (!user) return <Login onLogin={() => {}} />;
+
+  return (
+    <HashRouter>
+      <Routes>
+        <Route path="/"              element={<Layout><Overview /></Layout>} />
+        <Route path="/sensor-map"    element={<Layout><SensorMapPage /></Layout>} />
+        <Route path="/live-readings" element={<Layout><LiveReadings /></Layout>} />
+        <Route path="/alerts"        element={<Layout><AlertsOutliers /></Layout>} />
+        <Route path="/sensor-health" element={<Layout><SensorHealth /></Layout>} />
+        <Route path="/reports"       element={<Layout><Reports /></Layout>} />
+        <Route path="/settings"      element={<Layout><Settings /></Layout>} />
+        <Route path="/database"      element={<Layout><DatabaseExplorer /></Layout>} />
+        {user.role === 'admin' && (
+          <Route path="/admin" element={<Layout><Admin /></Layout>} />
+        )}
+        <Route path="/notifications" element={<Layout><PlaceholderPage titleKey="notifications" descKey="notificationsDesc" /></Layout>} />
+        <Route path="/system"        element={<Layout><PlaceholderPage titleKey="system" descKey="systemDesc" /></Layout>} />
+        <Route path="*"              element={<Layout><Overview /></Layout>} />
+      </Routes>
+    </HashRouter>
+  );
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   return (
-    <LanguageProvider>
-      <SettingsProvider>
-        <HashRouter>
-          <Routes>
-            <Route path="/"              element={<Layout><Overview /></Layout>} />
-            <Route path="/sensor-map"    element={<Layout><SensorMapPage /></Layout>} />
-            <Route path="/live-readings" element={<Layout><LiveReadings /></Layout>} />
-            <Route path="/alerts"        element={<Layout><AlertsOutliers /></Layout>} />
-            <Route path="/sensor-health" element={<Layout><SensorHealth /></Layout>} />
-            <Route path="/reports"       element={<Layout><Reports /></Layout>} />
-            <Route path="/settings"      element={<Layout><Settings /></Layout>} />
-            <Route path="/database"      element={<Layout><DatabaseExplorer /></Layout>} />
-            <Route path="/notifications" element={<Layout><PlaceholderPage titleKey="notifications" descKey="notificationsDesc" /></Layout>} />
-            <Route path="/system"        element={<Layout><PlaceholderPage titleKey="system" descKey="systemDesc" /></Layout>} />
-            <Route path="*"              element={<Layout><Overview /></Layout>} />
-          </Routes>
-        </HashRouter>
-      </SettingsProvider>
-    </LanguageProvider>
+    <AuthProvider>
+      <LanguageProvider>
+        <SettingsProvider>
+          <AppRoutes />
+        </SettingsProvider>
+      </LanguageProvider>
+    </AuthProvider>
   );
 }

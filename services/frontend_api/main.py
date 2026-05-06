@@ -1,10 +1,47 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from passlib.context import CryptContext
+from jose import JWTError, jwt as jose_jwt
+from pydantic import BaseModel
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+# ─── Auth config ──────────────────────────────────────────────────────────────
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+JWT_SECRET   = os.getenv("JWT_SECRET", "malmo-noise-secret-2026")
+JWT_ALG      = "HS256"
+JWT_EXPIRE_H = 24
+
+bearer_scheme = HTTPBearer()
+
+def hash_password(pw: str) -> str:
+    return pwd_context.hash(pw)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def create_token(username: str, role: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_H)
+    return jose_jwt.encode({"sub": username, "role": role, "exp": exp}, JWT_SECRET, algorithm=JWT_ALG)
+
+def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+    try:
+        payload = jose_jwt.decode(creds.credentials, JWT_SECRET, algorithms=[JWT_ALG])
+        return {"username": payload["sub"], "role": payload["role"]}
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+def require_admin(user: dict = Depends(get_current_user)):
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+# ─── App ──────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="Malmö Noise Dashboard API",
@@ -20,6 +57,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── DB helper ────────────────────────────────────────────────────────────────
+
 def get_db():
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "timescaledb"),
@@ -29,8 +68,120 @@ def get_db():
         password=os.getenv("DB_PASSWORD", "noise_password")
     )
 
+# ─── Startup: seed admin user ─────────────────────────────────────────────────
+
+@app.on_event("startup")
+def seed_admin():
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        cur.execute("SELECT 1 FROM users WHERE username = %s", ('mårten',))
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
+                ('mårten', hash_password('0046'), 'admin')
+            )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Startup seed error: {e}")
+
+# ─── Auth request models ──────────────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "user"
+
+# ─── Auth endpoints ───────────────────────────────────────────────────────────
+
+@app.post("/api/auth/login")
+def login(req: LoginRequest):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM users WHERE username = %s", (req.username,))
+    row = cur.fetchone()
+    conn.close()
+    if not row or not verify_password(req.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_token(row["username"], row["role"])
+    return {"token": token, "user": {"username": row["username"], "role": row["role"]}}
+
+@app.get("/api/auth/me")
+def get_me(user: dict = Depends(get_current_user)):
+    return user
+
+# ─── User management endpoints ────────────────────────────────────────────────
+
+@app.get("/api/users")
+def list_users(user: dict = Depends(require_admin)):
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT id, username, role, created_at FROM users ORDER BY created_at ASC")
+    rows = cur.fetchall()
+    conn.close()
+    return [{"id": r["id"], "username": r["username"], "role": r["role"],
+             "created_at": r["created_at"].isoformat() if r["created_at"] else None} for r in rows]
+
+@app.post("/api/users")
+def create_user(req: CreateUserRequest, user: dict = Depends(require_admin)):
+    if req.role not in ("admin", "user"):
+        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
+            (req.username, hash_password(req.password), req.role)
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise HTTPException(status_code=409, detail="Username already exists")
+    finally:
+        cur.close()
+        conn.close()
+    return {"ok": True}
+
+@app.delete("/api/users/{username}")
+def delete_user(username: str, user: dict = Depends(require_admin)):
+    if username == user["username"]:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    conn = get_db()
+    cur = conn.cursor()
+    # Prevent removing last admin
+    cur.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'")
+    admin_count = cur.fetchone()[0]
+    cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    if row[0] == 'admin' and admin_count <= 1:
+        raise HTTPException(status_code=400, detail="Cannot remove the last admin")
+    cur.execute("DELETE FROM users WHERE username = %s", (username,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return {"ok": True}
+
+# ─── Data endpoints (all require authentication) ──────────────────────────────
+
 @app.get("/api/db/summary")
-def get_db_summary():
+def get_db_summary(_user: dict = Depends(get_current_user)):
     """Returns a summary of what's in the database: total records, per-sensor counts, time range."""
     try:
         conn = get_db()
@@ -78,6 +229,7 @@ def get_db_summary():
 
 @app.get("/api/db/raw")
 def get_raw_measurements(
+    _user: dict = Depends(get_current_user),
     sensor_id: str = Query(default=None),
     limit: int = Query(default=50, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
@@ -132,7 +284,7 @@ def get_raw_measurements(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/sensors")
-def get_sensors():
+def get_sensors(_user: dict = Depends(get_current_user)):
     """Returns all sensors and their spatial coordinates for the Map view."""
     try:
         conn = get_db()
@@ -145,7 +297,7 @@ def get_sensors():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/measurements/latest")
-def get_latest_measurements():
+def get_latest_measurements(_user: dict = Depends(get_current_user)):
     """Returns the absolute latest noise reading for every sensor, joined with sensor description."""
     try:
         conn = get_db()
@@ -166,6 +318,7 @@ def get_latest_measurements():
 
 @app.get("/api/measurements/history")
 def get_historical_measurements(
+    _user: dict = Depends(get_current_user),
     hours: int = Query(default=1, ge=1, le=8760),
     from_dt: Optional[str] = Query(default=None),
     to_dt: Optional[str] = Query(default=None),
@@ -244,7 +397,7 @@ def get_historical_measurements(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/stats")
-def get_stats():
+def get_stats(_user: dict = Depends(get_current_user)):
     """Returns summary statistics for the dashboard KPI cards."""
     try:
         conn = get_db()
@@ -308,6 +461,7 @@ def get_stats():
 
 @app.get("/api/alerts")
 def get_alerts(
+    _user: dict = Depends(get_current_user),
     from_dt: Optional[str] = Query(default=None),
     to_dt: Optional[str] = Query(default=None),
 ):
@@ -361,7 +515,7 @@ def get_alerts(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/reports/data")
-def get_report_data():
+def get_report_data(_user: dict = Depends(get_current_user)):
     """Returns a full CSV-ready snapshot: all latest measurements joined with sensor descriptions."""
     try:
         conn = get_db()
@@ -398,7 +552,7 @@ def get_report_data():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/sensors/health")
-def get_sensor_health():
+def get_sensor_health(_user: dict = Depends(get_current_user)):
     """
     Returns per-sensor health metrics based on Data Availability Rate (DAR).
 
@@ -516,5 +670,3 @@ def get_sensor_health():
     except Exception as e:
         print(f"Error in /api/sensors/health: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-

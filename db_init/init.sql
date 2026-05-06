@@ -35,3 +35,12 @@ SELECT create_hypertable('noise_measurements', by_range('ts'), if_not_exists => 
 
 -- Create index for fast per-sensor time-window queries
 CREATE INDEX IF NOT EXISTS ix_sensor_ts ON noise_measurements (sensor_id, ts DESC);
+
+-- Users table for authentication
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);

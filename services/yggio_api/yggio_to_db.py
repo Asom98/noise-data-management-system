@@ -1,190 +1,292 @@
+"""
+Yggio → TimescaleDB ingestion service
+======================================
+On first startup (empty database) this service automatically backfills the
+full Yggio historical archive using 3-day paginated chunks with distance=60 s,
+giving one row per actual sensor reading.  Subsequent restarts skip the
+backfill and go straight to the live loop.
+
+Live loop (every 60 s):
+  1. Calls /iotnodes to register any new sensors.
+  2. Calls /iotnodes/{id}/stats with distance=60 for the last 10 minutes
+     so every reading the sensor produced is captured, not just the snapshot
+     that happened to land in the poll window.
+
+All rows — historical and live — share the same structure.
+"""
+
 import os
+import time
 import requests
 import psycopg2
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
-import time
 
-# Load secure credentials
 load_dotenv()
-USERNAME = os.getenv("YGGIO_USERNAME")
-PASSWORD = os.getenv("YGGIO_PASSWORD")
 
-# Database connection
-def get_db_connection():
+BASE_URL         = "https://sensordata.malmo.se/api"
+USERNAME         = os.getenv("YGGIO_USERNAME")
+PASSWORD         = os.getenv("YGGIO_PASSWORD")
+
+POLL_INTERVAL_S  = 60     # seconds between live cycles
+STATS_WINDOW_MIN = 10     # minutes covered per live cycle
+BACKFILL_DAYS    = 90     # how far back to fetch on first run
+CHUNK_DAYS       = 3      # days per paginated chunk (keeps responses < 5000 rows)
+
+
+# ── DB ────────────────────────────────────────────────────────────────────────
+
+def get_db():
     return psycopg2.connect(
         host=os.getenv("DB_HOST"),
         port=os.getenv("DB_PORT"),
         dbname=os.getenv("DB_NAME"),
         user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD")
+        password=os.getenv("DB_PASSWORD"),
     )
 
-def fetch_live_data():
-    """Authenticates and fetches the CURRENT live state of all sensors"""
-    print("Authenticating with Malmö Yggio Platform...")
-    auth_resp = requests.post(
-        "https://sensordata.malmo.se/api/auth/local",
-        headers={"accept": "application/json", "Content-Type": "application/json"},
-        json={"username": USERNAME, "password": PASSWORD}
-    )
-    if auth_resp.status_code != 200:
-        print("Auth failed!")
-        return None
-        
-    token = auth_resp.json().get("token")
-    
-    print("Fetching live sensor states...")
-    nodes_resp = requests.get(
-        "https://sensordata.malmo.se/api/iotnodes",
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    )
-    
-    if nodes_resp.status_code == 200:
-        return nodes_resp.json()
-    return None
 
-def _flat_search(d, keyword, excluded):
-    """Search nested dict for a key containing keyword, skipping excluded keys."""
-    for key, val in d.items():
-        key_lower = key.lower()
-        if isinstance(val, dict):
-            result = _flat_search(val, keyword, excluded)
-            if result is not None:
-                return result
-        elif (keyword in key_lower
-              and key_lower not in excluded
-              and not any(ex in key_lower for ex in excluded)
-              and isinstance(val, (int, float))):
-            return float(val)
-    return None
-
-
-def extract_noise_value(values_dict):
-    """
-    Extracts the primary acoustic noise level (dB) from the Yggio sensor payload.
-
-    Priority order:
-      1. soundLaeq  — equivalent continuous noise level (acoustically correct standard)
-      2. soundLevel — instantaneous level (used by DN0007, DN0008, DN0010)
-
-    Explicitly excluded (NOT dB values):
-      - soundAvgMinutes  — averaging window in minutes (integer metadata, e.g. 1 or 15)
-      - soundMinLevel    — minimum threshold configuration, not a measurement
-      - soundLamin       — minimum level over window (secondary statistic, not primary)
-      - soundLamax       — maximum level over window (secondary statistic)
-      - soundP1/P10/P50/P90/P99 — percentile statistics, not the primary reading
-
-    This two-pass approach prevents the dict-iteration-order bug where
-    soundAvgMinutes (value=15 or 1) was returned before soundLevel for
-    sensors DN0007 and DN0008.
-    """
-    EXCLUDED = {
-        'soundavgminutes', 'soundminlevel', 'soundlamin', 'soundlamax',
-        'soundp1', 'soundp10', 'soundp50', 'soundp90', 'soundp99',
-    }
-    result = _flat_search(values_dict, 'soundlaeq', EXCLUDED)
-    if result is not None:
-        return result
-    return _flat_search(values_dict, 'soundlevel', EXCLUDED)
-
-
-def extract_acoustic_metrics(values_dict):
-    """
-    Extracts LAeq, LAmax, LAmin from the Yggio payload.
-    Returns (laeq, lamax, lamin) — any value may be None if not present.
-    """
-    EXCLUDED_LAEQ = {
-        'soundavgminutes', 'soundminlevel', 'soundlamin', 'soundlamax',
-        'soundp1', 'soundp10', 'soundp50', 'soundp90', 'soundp99',
-    }
-    EXCLUDED_MINMAX = {
-        'soundavgminutes', 'soundminlevel',
-        'soundp1', 'soundp10', 'soundp50', 'soundp90', 'soundp99',
-    }
-    laeq = _flat_search(values_dict, 'soundlaeq', EXCLUDED_LAEQ)
-    if laeq is None:
-        laeq = _flat_search(values_dict, 'soundlevel', EXCLUDED_LAEQ)
-    lamax = _flat_search(values_dict, 'soundlamax', EXCLUDED_MINMAX)
-    lamin = _flat_search(values_dict, 'soundlamin', EXCLUDED_MINMAX)
-    return laeq, lamax, lamin
-
-def ingest_to_timescale(nodes):
-    """Parses API data, registers ANY new sensors, and inserts data"""
-    conn = get_db_connection()
-    conn.autocommit = True
-    cursor = conn.cursor()
-    
-    success_count = 0
-    
-    for node in nodes:
-        node_id = node.get("name", "Unknown Node")
-        reported_at = node.get("reportedAt")
-        values = node.get("values", {})
-
-        # Extract human-readable location from the Yggio name field.
-        # Name format: "DN0007-Buller Spångatan x Bergsgatan"
-        # We store the location part after "Buller " as the description.
-        full_name = node_id  # node_id == the "name" field
-        if '-Buller ' in full_name:
-            location = full_name.split('-Buller ', 1)[1].strip()
-        else:
-            location = full_name
-
-        # 1. Automatically register ANY sensor it finds
-        try:
-            cursor.execute("""
-                INSERT INTO sensors (sensor_id, description)
-                VALUES (%s, %s)
-                ON CONFLICT (sensor_id) DO UPDATE SET description = EXCLUDED.description;
-            """, (node_id, location))
-        except Exception as e:
-            print(f"Failed to register sensor {node_id}: {e}")
-            continue
-            
-        # 2. Extract primary value + acoustic metrics (LAeq, LAmax, LAmin)
-        laeq, lamax, lamin = extract_acoustic_metrics(values)
-        noise_value = laeq if laeq is not None else extract_noise_value(values)
-
-        # 3. Save to the database
-        if noise_value is not None and reported_at is not None:
-            try:
-                insert_query = """
-                    INSERT INTO noise_measurements
-                        (ts, sensor_id, value_db, unit, quality_flag, laeq, lamax, lamin)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (sensor_id, ts) DO NOTHING;
-                """
-                cursor.execute(insert_query, (
-                    reported_at, node_id, noise_value, 'dB', 1,
-                    laeq, lamax, lamin,
-                ))
-
-                if cursor.rowcount > 0:
-                    metrics_str = f"LAeq={laeq} LAmax={lamax} LAmin={lamin}"
-                    print(f"✅ NEW DATA: {node_id} -> {noise_value} dB  [{metrics_str}]  at {reported_at}")
-                    success_count += 1
-                else:
-                    print(f"⏩ Skipped duplicate: {node_id} at {reported_at}")
-
-            except Exception as e:
-                print(f"❌ DB Insert Error for {node_id}: {e}")
-                
-    cursor.close()
+def db_is_empty():
+    conn = get_db()
+    cur  = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM noise_measurements;")
+    count = cur.fetchone()[0]
+    cur.close()
     conn.close()
-    print(f"\nFinished ingestion cycle. Successfully saved {success_count} real records to TimescaleDB!")
+    return count == 0
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+def authenticate():
+    resp = requests.post(
+        f"{BASE_URL}/auth/local",
+        headers={"Content-Type": "application/json"},
+        json={"username": USERNAME, "password": PASSWORD},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    print("✅ Authenticated with Yggio")
+    return resp.json()["token"]
+
+
+# ── Node / sensor helpers ─────────────────────────────────────────────────────
+
+def fetch_live_nodes(token):
+    resp = requests.get(
+        f"{BASE_URL}/iotnodes",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def detect_measurement_key(values: dict) -> str | None:
+    """
+    Returns the Yggio measurement path for the /stats endpoint.
+    Two payload formats exist in the field:
+      A. Nested:  {hex_id}_output → {soundLevel, soundLaeq, …}
+      B. Flat:    {hex_id}_soundLaeq / {hex_id}_soundLevel
+    """
+    for key, val in values.items():
+        if key.endswith("_output") and isinstance(val, dict):
+            if "soundLaeq" in val:
+                return f"values.{key}.soundLaeq"
+            if "soundLevel" in val:
+                return f"values.{key}.soundLevel"
+    for key in values:
+        if key.endswith("_soundLaeq"):
+            return f"values.{key}"
+        if key.endswith("_soundLevel"):
+            return f"values.{key}"
+    return None
+
+
+def register_sensors(nodes, conn):
+    cur = conn.cursor()
+    for node in nodes:
+        name = node.get("name", "")
+        if "Buller" not in name:
+            continue
+        location = name.split("-Buller ", 1)[1].strip() if "-Buller " in name else name
+        cur.execute("""
+            INSERT INTO sensors (sensor_id, description)
+            VALUES (%s, %s)
+            ON CONFLICT (sensor_id) DO UPDATE SET description = EXCLUDED.description;
+        """, (name, location))
+    conn.commit()
+    cur.close()
+
+
+def buller_sensors(nodes) -> list[dict]:
+    result = []
+    for node in nodes:
+        name = node.get("name", "")
+        if "Buller" not in name:
+            continue
+        m_key = detect_measurement_key(node.get("values", {}))
+        result.append({"name": name, "node_id": node["_id"], "measurement": m_key})
+    return result
+
+
+# ── Stats fetch ───────────────────────────────────────────────────────────────
+
+def fetch_stats_chunk(token, node_id, measurement, start_ms, end_ms):
+    resp = requests.get(
+        f"{BASE_URL}/iotnodes/{node_id}/stats",
+        headers={"Authorization": f"Bearer {token}"},
+        params={
+            "measurement":   measurement,
+            "start":         start_ms,
+            "end":           end_ms,
+            "distance":      60,
+            "valueFunction": "mean",
+        },
+        timeout=30,
+    )
+    if resp.status_code == 404:
+        return []
+    resp.raise_for_status()
+    data = resp.json()
+    return data if isinstance(data, list) else []
+
+
+def insert_stats_rows(rows, sensor_name, conn):
+    cur = conn.cursor()
+    inserted = 0
+    for item in rows:
+        raw_time = item.get("time")
+        val      = item.get("value")
+        if raw_time is None or val is None:
+            continue
+        try:
+            ts = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+            cur.execute("""
+                INSERT INTO noise_measurements (ts, sensor_id, value_db, unit, quality_flag)
+                VALUES (%s, %s, %s, 'dB', 1)
+                ON CONFLICT (sensor_id, ts) DO NOTHING;
+            """, (ts, sensor_name, round(float(val), 1)))
+            if cur.rowcount > 0:
+                inserted += 1
+        except Exception as e:
+            print(f"  ⚠️  Row error for {sensor_name}: {e}")
+    conn.commit()
+    cur.close()
+    return inserted
+
+
+# ── Historical backfill ───────────────────────────────────────────────────────
+
+def run_backfill(token, nodes):
+    print(f"\n📥 Starting historical backfill — last {BACKFILL_DAYS} days "
+          f"in {CHUNK_DAYS}-day chunks (distance=60 s)\n")
+
+    sensors  = buller_sensors(nodes)
+    now_ms   = int(time.time() * 1000)
+    start_ms = now_ms - BACKFILL_DAYS * 24 * 3600 * 1000
+    chunk_ms = CHUNK_DAYS * 24 * 3600 * 1000
+    total    = 0
+
+    conn = get_db()
+
+    for s in sensors:
+        if not s["measurement"]:
+            print(f"  ⚠️  {s['name']} — no measurement key detected, skipping")
+            continue
+
+        print(f"\n── {s['name']} ──")
+        sensor_total = 0
+        cursor = start_ms
+
+        while cursor < now_ms:
+            chunk_end = min(cursor + chunk_ms, now_ms)
+            chunk = fetch_stats_chunk(token, s["node_id"], s["measurement"],
+                                      cursor, chunk_end)
+            if chunk:
+                n = insert_stats_rows(chunk, s["name"], conn)
+                sensor_total += n
+                start_label = datetime.fromtimestamp(cursor / 1000, tz=timezone.utc).date()
+                end_label   = datetime.fromtimestamp(chunk_end / 1000, tz=timezone.utc).date()
+                print(f"  {start_label} → {end_label}  {len(chunk)} points  "
+                      f"({n} new, {sensor_total} total)")
+            cursor = chunk_end
+
+        total += sensor_total
+        print(f"  ✅ {s['name']}: {sensor_total} rows inserted")
+
+    conn.close()
+    print(f"\n📥 Backfill complete — {total} total rows inserted\n")
+
+
+# ── Live ingestion ────────────────────────────────────────────────────────────
+
+def run_live_cycle(token, nodes):
+    now_ms   = int(time.time() * 1000)
+    start_ms = now_ms - STATS_WINDOW_MIN * 60 * 1000
+    sensors  = buller_sensors(nodes)
+    conn     = get_db()
+    total    = 0
+
+    for s in sensors:
+        if not s["measurement"]:
+            continue
+        chunk = fetch_stats_chunk(token, s["node_id"], s["measurement"],
+                                  start_ms, now_ms)
+        total += insert_stats_rows(chunk, s["name"], conn)
+
+    conn.close()
+    return total
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("Starting Yggio API Continuous Ingestion Service...")
-    
-    # Run forever!
+    print("Starting Yggio ingestion service...")
+
     while True:
         try:
-            live_nodes = fetch_live_data()
-            if live_nodes:
-                ingest_to_timescale(live_nodes)
+            token = authenticate()
+            nodes = fetch_live_nodes(token)
+
+            # Register sensors regardless of whether we backfill
+            conn = get_db()
+            register_sensors(nodes, conn)
+            conn.close()
+
+            # On first run (empty DB) backfill the full archive
+            if db_is_empty():
+                print("📭 Database is empty — running historical backfill first...")
+                run_backfill(token, nodes)
+            else:
+                print("✅ Database has data — skipping backfill")
+
+            # Enter the live loop
+            print(f"\n🔄 Entering live loop (every {POLL_INTERVAL_S}s, "
+                  f"last {STATS_WINDOW_MIN} min stats window)\n")
+
+            while True:
+                try:
+                    token = authenticate()
+                    nodes = fetch_live_nodes(token)
+
+                    conn = get_db()
+                    register_sensors(nodes, conn)
+                    conn.close()
+
+                    new_rows = run_live_cycle(token, nodes)
+
+                    ts_now = datetime.now(timezone.utc).strftime("%H:%M:%S")
+                    if new_rows > 0:
+                        print(f"[{ts_now}] ✅ Inserted {new_rows} new readings")
+                    else:
+                        print(f"[{ts_now}] ⏩ No new readings in window")
+
+                except Exception as e:
+                    print(f"❌ Live cycle error: {e}")
+
+                time.sleep(POLL_INTERVAL_S)
+
         except Exception as e:
-            print(f"Critical error in main loop: {e}")
-            
-        print("Sleeping for 60 seconds before the next poll...\n")
-        time.sleep(60) 
+            print(f"❌ Startup error: {e} — retrying in 30 s")
+            time.sleep(30)

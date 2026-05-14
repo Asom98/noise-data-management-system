@@ -31,24 +31,48 @@ export default function Login({ expectedRole, onLogin }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F3F4F6' }}>
-      <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '40px 48px', boxShadow: '0 4px 24px rgba(0,0,0,0.10)', width: '100%', maxWidth: '400px' }}>
+    <>
+      <style>{`
+        .login-root {
+          min-height: 100vh;
+          width: 100%;
+          background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 50%, #F0FDF4 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 40px 24px;
+          box-sizing: border-box;
+        }
+        .login-card {
+          background: white;
+          border-radius: 20px;
+          padding: 44px 48px;
+          box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+          width: 100%;
+          max-width: 420px;
+        }
+        @media (max-width: 480px) {
+          .login-card { padding: 32px 24px; }
+        }
+      `}</style>
+      <div className="login-root">
+      <div className="login-card">
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
-          <div style={{ width: '40px', height: '40px', backgroundColor: '#2563EB', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '36px' }}>
+          <div style={{ width: '48px', height: '48px', backgroundColor: '#2563EB', borderRadius: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(37,99,235,0.35)', flexShrink: 0 }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
             </svg>
           </div>
           <div>
-            <div style={{ fontWeight: '700', fontSize: '16px', color: '#111827' }}>Malmö Noise</div>
-            <div style={{ fontSize: '12px', color: '#6B7280' }}>Monitoring System</div>
+            <div style={{ fontWeight: '800', fontSize: '18px', color: '#0F172A', letterSpacing: '-0.3px' }}>Malmö Noise</div>
+            <div style={{ fontSize: '12px', color: '#64748B', fontWeight: '500' }}>Monitoring System</div>
           </div>
         </div>
 
-        <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 4px' }}>Sign in</h2>
-        <p style={{ fontSize: '13px', color: '#6B7280', margin: '0 0 24px' }}>
-          {expectedLabel ? `Signing in as ${expectedLabel}` : 'Enter your credentials to continue'}
+        <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#0F172A', margin: '0 0 6px', letterSpacing: '-0.3px' }}>Sign in</h2>
+        <p style={{ fontSize: '14px', color: '#64748B', margin: '0 0 24px', lineHeight: 1.5 }}>
+          {expectedLabel ? <>Signing in as <b style={{ color: '#0F172A' }}>{expectedLabel}</b></> : 'Enter your credentials to continue'}
         </p>
 
         <button
@@ -89,12 +113,13 @@ export default function Login({ expectedRole, onLogin }) {
           <button
             type="submit"
             disabled={loading}
-            style={{ padding: '11px', borderRadius: '8px', backgroundColor: '#2563EB', color: 'white', border: 'none', fontSize: '14px', fontWeight: '600', cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1, marginTop: '4px' }}
+            style={{ padding: '13px', borderRadius: '12px', backgroundColor: '#2563EB', color: 'white', border: 'none', fontSize: '15px', fontWeight: '700', cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1, marginTop: '4px', boxShadow: '0 4px 14px rgba(37,99,235,0.4)', letterSpacing: '0.01em' }}
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -101,14 +101,17 @@ function Layout({ children }) {
 
 function AppRoutes() {
   const { user, loading, showLanding, setShowLanding } = useAuth();
+  const [expectedRole, setExpectedRole] = React.useState(null);
 
   if (loading) return <div style={{ minHeight: '100vh', backgroundColor: '#F3F4F6' }} />;
 
   // Step 1: show landing — user hasn't chosen a role yet (or just logged out)
-  if (showLanding) return <LandingPage onNeedsLogin={() => setShowLanding(false)} />;
+  if (showLanding) return (
+    <LandingPage onNeedsLogin={role => { setExpectedRole(role); setShowLanding(false); }} />
+  );
 
   // Step 2: user picked a role that requires login but isn't authenticated yet
-  if (!user) return <Login onLogin={() => {}} />;
+  if (!user) return <Login expectedRole={expectedRole} onLogin={() => {}} />;
 
   const can = (route) => canAccess(user.role, route);
 

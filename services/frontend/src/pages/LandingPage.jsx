@@ -59,7 +59,7 @@ export default function LandingPage({ onNeedsLogin }) {
       setLoading(card.role);
       try { await loginAsGuest(); } finally { setLoading(null); }
     } else {
-      onNeedsLogin();
+      onNeedsLogin(card.role);
     }
   }
 

@@ -1,18 +1,27 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { ROLES } from '../utils/roles';
 
-export default function Login({ onLogin }) {
-  const { login, setShowLanding } = useAuth();
+export default function Login({ expectedRole, onLogin }) {
+  const { login, logout, setShowLanding } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+
+  const expectedLabel = ROLES[expectedRole]?.label ?? expectedRole;
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
       const user = await login(username, password);
+      // Admin can enter through any card; everyone else must match the selected card.
+      if (user.role !== 'admin' && expectedRole && user.role !== expectedRole) {
+        await logout();
+        setError(`This login is for ${expectedLabel} accounts only. Your account does not have that role.`);
+        return;
+      }
       onLogin(user);
     } catch {
       setError('Invalid username or password');
@@ -38,7 +47,9 @@ export default function Login({ onLogin }) {
         </div>
 
         <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 4px' }}>Sign in</h2>
-        <p style={{ fontSize: '13px', color: '#6B7280', margin: '0 0 24px' }}>Enter your credentials to continue</p>
+        <p style={{ fontSize: '13px', color: '#6B7280', margin: '0 0 24px' }}>
+          {expectedLabel ? `Signing in as ${expectedLabel}` : 'Enter your credentials to continue'}
+        </p>
 
         <button
           type="button"

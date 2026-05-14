@@ -30,8 +30,7 @@ PASSWORD         = os.getenv("YGGIO_PASSWORD")
 
 POLL_INTERVAL_S  = 60     # seconds between live cycles
 STATS_WINDOW_MIN = 10     # minutes covered per live cycle
-BACKFILL_DAYS    = 90     # how far back to fetch on first run (empty DB)
-RECENT_DAYS      = 14     # window always re-fetched on restart to close any gaps
+BACKFILL_DAYS    = 90     # days of history re-fetched on every startup
 CHUNK_DAYS       = 3      # days per paginated chunk (keeps responses < 5000 rows)
 
 
@@ -45,20 +44,6 @@ def get_db():
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
     )
-
-
-def get_last_ts():
-    """
-    Returns the most recent timestamp across all sensors, or None if the DB is empty.
-    Used at startup to decide whether a gap backfill is needed.
-    """
-    conn = get_db()
-    cur  = conn.cursor()
-    cur.execute("SELECT MAX(ts) FROM noise_measurements;")
-    result = cur.fetchone()[0]
-    cur.close()
-    conn.close()
-    return result
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -224,43 +209,6 @@ def run_backfill(token, nodes):
     print(f"\n📥 Backfill complete — {total} total rows inserted\n")
 
 
-def run_recent_backfill(token, nodes):
-    """
-    Re-fetches the last RECENT_DAYS window on every startup.
-    Idempotent — ON CONFLICT DO NOTHING means existing rows are never touched.
-    Guarantees that any gaps caused by downtime (however long) are closed
-    as long as they fall within the recent window.
-    """
-    now_ms   = int(time.time() * 1000)
-    start_ms = now_ms - RECENT_DAYS * 24 * 3600 * 1000
-    chunk_ms = CHUNK_DAYS * 24 * 3600 * 1000
-
-    print(f"\n🔁 Startup gap-fill — last {RECENT_DAYS} days (idempotent)\n")
-
-    sensors = buller_sensors(nodes)
-    total   = 0
-    conn    = get_db()
-
-    for s in sensors:
-        if not s["measurement"]:
-            continue
-
-        sensor_total = 0
-        cursor = start_ms
-        while cursor < now_ms:
-            chunk_end = min(cursor + chunk_ms, now_ms)
-            chunk = fetch_stats_chunk(token, s["node_id"], s["measurement"],
-                                      cursor, chunk_end)
-            if chunk:
-                sensor_total += insert_stats_rows(chunk, s["name"], conn)
-            cursor = chunk_end
-
-        total += sensor_total
-        if sensor_total > 0:
-            print(f"  ✅ {s['name']}: {sensor_total} new rows")
-
-    conn.close()
-    print(f"\n🔁 Startup gap-fill complete — {total} new rows inserted\n")
 
 
 # ── Live ingestion ────────────────────────────────────────────────────────────
@@ -298,14 +246,10 @@ if __name__ == "__main__":
             register_sensors(nodes, conn)
             conn.close()
 
-            # On first deployment (empty DB) fetch the full archive.
-            # On every subsequent restart re-fetch the last RECENT_DAYS window
-            # so any gaps from downtime are automatically closed.
-            if get_last_ts() is None:
-                print("📭 Database is empty — running full historical backfill...")
-                run_backfill(token, nodes)
-            else:
-                run_recent_backfill(token, nodes)
+            # Always re-fetch the full BACKFILL_DAYS archive on every startup.
+            # Idempotent — ON CONFLICT DO NOTHING means no duplicates are inserted.
+            # Guarantees no day is ever missed regardless of downtime length.
+            run_backfill(token, nodes)
 
             # Enter the live loop
             print(f"\n🔄 Entering live loop (every {POLL_INTERVAL_S}s, "

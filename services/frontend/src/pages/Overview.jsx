@@ -171,8 +171,11 @@ function KpiCard({ title, value, subtitle, borderHighlight, icon }) {
   );
 }
 
-function ChartCard({ title, subtitle, hours, setHours, loading, history, onExport, showPoints, onTogglePoints, children }) {
+function ChartCard({ title, subtitle, hours, setHours, loading, history, onExport, onRefresh, updatedAt, showPoints, onTogglePoints, children }) {
   const theme = useTheme();
+  const updatedLabel = updatedAt
+    ? updatedAt.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : null;
   return (
     <div style={{ backgroundColor: theme.cardBg, borderRadius: '12px', padding: '20px 24px', boxShadow: theme.shadow, border: `1px solid ${theme.border}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
@@ -191,6 +194,22 @@ function ChartCard({ title, subtitle, hours, setHours, loading, history, onExpor
               border: hours === opt.value ? `1px solid ${theme.accentBorder}` : `1px solid ${theme.border}`,
             }}>{opt.label}</button>
           ))}
+          <div style={{ width: '1px', height: '20px', backgroundColor: theme.border }} />
+          {updatedLabel && (
+            <span style={{ fontSize: '11px', color: theme.textMuted, whiteSpace: 'nowrap' }}>
+              Updated {updatedLabel}
+            </span>
+          )}
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            title="Refresh chart data"
+            style={{ padding: '6px 10px', borderRadius: '6px', fontSize: '13px', backgroundColor: theme.cardBg, color: theme.textSecondary, border: `1px solid ${theme.border}`, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.5 : 1 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
           <button onClick={onExport} style={{ padding: '6px 14px', borderRadius: '6px', fontSize: '13px', backgroundColor: theme.cardBg, color: theme.textSecondary, border: `1px solid ${theme.border}`, cursor: 'pointer' }}>
             Export
           </button>
@@ -218,7 +237,9 @@ export default function Overview() {
   const [keys2, setKeys2] = useState([]);
   const [loading2, setLoading2] = useState(true);
   const [showPoints2, setShowPoints2] = useState(false);
+  const [chartUpdatedAt, setChartUpdatedAt] = useState(null);
 
+  // KPI cards refresh every 15 s — these are truly live values.
   useEffect(() => {
     async function fetchStats() {
       try {
@@ -235,25 +256,26 @@ export default function Overview() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    async function fetch2() {
-      setLoading2(true);
-      try {
-        const res = await axios.get(`${API_BASE}/api/measurements/history?hours=${hours2}`);
-        const data = res.data;
-        setHistory2(data);
-        if (data.length > 0) {
-          const keySet = new Set();
-          data.forEach(row => Object.keys(row).forEach(k => { if (k.startsWith('avg__')) keySet.add(k); }));
-          setKeys2([...keySet]);
-        }
-      } catch (e) { /* silent */ }
-      finally { setLoading2(false); }
-    }
-    fetch2();
-    const interval = setInterval(fetch2, 15000);
-    return () => clearInterval(interval);
+  // Chart data is fetched only when the time range changes or the user
+  // manually refreshes. No auto-interval — prevents zoom/pan/legend state
+  // from being wiped while the user is interacting with the chart.
+  const fetchChart = React.useCallback(async () => {
+    setLoading2(true);
+    try {
+      const res = await axios.get(`${API_BASE}/api/measurements/history?hours=${hours2}`);
+      const data = res.data;
+      setHistory2(data);
+      if (data.length > 0) {
+        const keySet = new Set();
+        data.forEach(row => Object.keys(row).forEach(k => { if (k.startsWith('avg__')) keySet.add(k); }));
+        setKeys2([...keySet]);
+      }
+      setChartUpdatedAt(new Date());
+    } catch (e) { /* silent */ }
+    finally { setLoading2(false); }
   }, [hours2]);
+
+  useEffect(() => { fetchChart(); }, [fetchChart]);
 
   if (loading) {
     return (
@@ -322,6 +344,8 @@ export default function Overview() {
         loading={loading2}
         history={history2}
         onExport={() => downloadCSV('noise-overview-ypan.csv', history2)}
+        onRefresh={fetchChart}
+        updatedAt={chartUpdatedAt}
         showPoints={showPoints2}
         onTogglePoints={setShowPoints2}
       >

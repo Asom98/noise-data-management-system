@@ -3,6 +3,7 @@ import axios from 'axios';
 import { API_BASE } from '../utils/noise';
 import { useTheme } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
+import { ROLES } from '../utils/roles';
 
 export default function Admin() {
   const theme = useTheme();
@@ -15,7 +16,7 @@ export default function Admin() {
   // Add user form
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole]         = useState('user');
+  const [newRole, setNewRole]         = useState('citizen');
   const [addError, setAddError]       = useState('');
   const [addLoading, setAddLoading]   = useState(false);
 
@@ -80,8 +81,9 @@ export default function Admin() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '12px', fontWeight: '500', color: theme.textSecondary }}>Role</label>
             <select value={newRole} onChange={e => setNewRole(e.target.value)} style={{ ...input, cursor: 'pointer' }}>
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
+              {Object.entries(ROLES).map(([value, { label }]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
           </div>
           <button type="submit" disabled={addLoading} style={{ padding: '8px 20px', borderRadius: '8px', backgroundColor: theme.accent, color: 'white', border: 'none', fontSize: '13px', fontWeight: '600', cursor: addLoading ? 'default' : 'pointer', opacity: addLoading ? 0.7 : 1 }}>
@@ -119,9 +121,9 @@ export default function Admin() {
                   </td>
                   <td style={{ padding: '12px 16px' }}>
                     <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
-                      backgroundColor: u.role === 'admin' ? '#EFF6FF' : theme.tableHeadBg,
-                      color: u.role === 'admin' ? '#2563EB' : theme.textSecondary }}>
-                      {u.role}
+                      backgroundColor: u.role === 'admin' ? '#EFF6FF' : u.role === 'environmental_officer' ? '#F0FDF4' : u.role === 'it_staff' ? '#FFF7ED' : theme.tableHeadBg,
+                      color: u.role === 'admin' ? '#2563EB' : u.role === 'environmental_officer' ? '#16A34A' : u.role === 'it_staff' ? '#EA580C' : theme.textSecondary }}>
+                      {ROLES[u.role]?.label ?? u.role}
                     </span>
                   </td>
                   <td style={{ padding: '12px 16px', color: theme.textSecondary, fontSize: '12px' }}>

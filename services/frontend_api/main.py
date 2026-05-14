@@ -139,8 +139,9 @@ def list_users(user: dict = Depends(require_admin)):
 
 @app.post("/api/users")
 def create_user(req: CreateUserRequest, user: dict = Depends(require_admin)):
-    if req.role not in ("admin", "user"):
-        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+    valid_roles = ("admin", "environmental_officer", "it_staff", "citizen")
+    if req.role not in valid_roles:
+        raise HTTPException(status_code=400, detail=f"Role must be one of: {', '.join(valid_roles)}")
     conn = get_db()
     cur = conn.cursor()
     try:

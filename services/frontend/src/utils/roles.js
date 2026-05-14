@@ -6,6 +6,7 @@
  * read from this config so access is enforced in one place.
  */
 
+// Manageable roles — shown in admin panel, assignable to real users.
 export const ROLES = {
   admin: {
     label: 'Admin',
@@ -29,14 +30,13 @@ export const ROLES = {
     description: 'Technical pages: overview, sensor health and database',
     routes: ['/', '/sensor-health', '/database'],
   },
-  citizen: {
-    label: 'Citizen',
-    description: 'Public view: overview and sensor map',
-    routes: ['/', '/sensor-map'],
-  },
 };
+
+// System-only routes for the citizen guest flow (not assignable via admin panel).
+const CITIZEN_ROUTES = ['/', '/sensor-map'];
 
 /** Returns true if the given role can access the given route. */
 export function canAccess(role, route) {
+  if (role === 'citizen') return CITIZEN_ROUTES.includes(route);
   return ROLES[role]?.routes.includes(route) ?? false;
 }

@@ -17,7 +17,6 @@ const CARDS = [
     bg: '#F0FDF4',
     border: '#BBF7D0',
     requiresLogin: true,
-    btnLabel: 'Sign in',
   },
   {
     role: 'it_staff',
@@ -33,7 +32,6 @@ const CARDS = [
     bg: '#EFF6FF',
     border: '#BFDBFE',
     requiresLogin: true,
-    btnLabel: 'Sign in',
   },
   {
     role: 'citizen',
@@ -49,7 +47,6 @@ const CARDS = [
     bg: '#F5F3FF',
     border: '#DDD6FE',
     requiresLogin: false,
-    btnLabel: 'Enter',
   },
 ];
 
@@ -100,7 +97,7 @@ export default function LandingPage({ onNeedsLogin }) {
             key={card.role}
             style={{
               backgroundColor: 'white', borderRadius: '16px', padding: '32px 28px',
-              border: `1.5px solid #E5E7EB`, boxShadow: '0 2px 12px rgba(0,0,0,0.07)',
+              border: '1.5px solid #E5E7EB', boxShadow: '0 2px 12px rgba(0,0,0,0.07)',
               flex: '1 1 240px', maxWidth: '280px',
               display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '16px',
               transition: 'box-shadow 0.2s, transform 0.2s',
@@ -108,27 +105,20 @@ export default function LandingPage({ onNeedsLogin }) {
             onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.13)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
             onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.07)'; e.currentTarget.style.transform = 'none'; }}
           >
-            {/* Icon */}
             <div style={{ width: '64px', height: '64px', borderRadius: '14px', backgroundColor: card.bg, border: `1px solid ${card.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: card.accent }}>
               {card.icon}
             </div>
-
-            {/* Text */}
             <div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>{card.title}</div>
               <div style={{ fontSize: '12px', fontWeight: '600', color: card.accent, marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{card.subtitle}</div>
               <div style={{ fontSize: '13px', color: '#6B7280', lineHeight: 1.6 }}>{card.description}</div>
             </div>
-
-            {/* Login badge */}
             {!card.requiresLogin && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: card.accent, fontWeight: '600' }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 No login required
               </div>
             )}
-
-            {/* Button */}
             <button
               onClick={() => handleClick(card)}
               disabled={loading === card.role}
@@ -141,7 +131,7 @@ export default function LandingPage({ onNeedsLogin }) {
                 transition: 'opacity 0.15s',
               }}
             >
-              {loading === card.role ? 'Entering…' : card.btnLabel}
+              {loading === card.role ? 'Entering…' : card.requiresLogin ? 'Sign in' : 'Enter'}
             </button>
           </div>
         ))}

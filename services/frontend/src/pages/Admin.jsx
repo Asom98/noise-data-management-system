@@ -16,7 +16,7 @@ export default function Admin() {
   // Add user form
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole]         = useState('citizen');
+  const [newRole, setNewRole]         = useState('environmental_officer');
   const [addError, setAddError]       = useState('');
   const [addLoading, setAddLoading]   = useState(false);
 
@@ -35,7 +35,7 @@ export default function Admin() {
     setAddError(''); setAddLoading(true);
     try {
       await axios.post(`${API_BASE}/api/users`, { username: newUsername, password: newPassword, role: newRole });
-      setNewUsername(''); setNewPassword(''); setNewRole('user');
+      setNewUsername(''); setNewPassword(''); setNewRole('environmental_officer');
       load();
     } catch (e) {
       setAddError(e.response?.data?.detail ?? 'Failed to create user');

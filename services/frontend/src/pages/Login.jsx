@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login({ onLogin }) {
-  const { login } = useAuth();
+  const { login, setShowLanding } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
@@ -39,6 +39,15 @@ export default function Login({ onLogin }) {
 
         <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: '0 0 4px' }}>Sign in</h2>
         <p style={{ fontSize: '13px', color: '#6B7280', margin: '0 0 24px' }}>Enter your credentials to continue</p>
+
+        <button
+          type="button"
+          onClick={() => setShowLanding(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', fontSize: '13px', color: '#6B7280', cursor: 'pointer', padding: 0, marginBottom: '16px' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to role selection
+        </button>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>

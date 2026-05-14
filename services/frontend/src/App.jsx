@@ -12,6 +12,7 @@ import Settings from './pages/Settings';
 import DatabaseExplorer from './pages/DatabaseExplorer';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
+import LandingPage from './pages/LandingPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { canAccess } from './utils/roles';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
@@ -99,9 +100,14 @@ function Layout({ children }) {
 // ─── AppRoutes (auth-aware) ───────────────────────────────────────────────────
 
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { user, loading, showLanding, setShowLanding } = useAuth();
 
   if (loading) return <div style={{ minHeight: '100vh', backgroundColor: '#F3F4F6' }} />;
+
+  // Step 1: show landing — user hasn't chosen a role yet (or just logged out)
+  if (showLanding) return <LandingPage onNeedsLogin={() => setShowLanding(false)} />;
+
+  // Step 2: user picked a role that requires login but isn't authenticated yet
   if (!user) return <Login onLogin={() => {}} />;
 
   const can = (route) => canAccess(user.role, route);

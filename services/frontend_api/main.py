@@ -125,6 +125,13 @@ def login(req: LoginRequest):
 def get_me(user: dict = Depends(get_current_user)):
     return user
 
+@app.post("/api/auth/guest")
+def guest_login():
+    """Issues a short-lived citizen token with no credentials required.
+    Citizens see public noise data only — role-based access limits their routes."""
+    token = create_token("guest", "citizen")
+    return {"token": token, "user": {"username": "guest", "role": "citizen"}}
+
 # ─── User management endpoints ────────────────────────────────────────────────
 
 @app.get("/api/users")

@@ -5,8 +5,10 @@ import { API_BASE } from '../utils/noise';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+  // showLanding: true until the user picks a dashboard type (even after logout)
+  const [showLanding, setShowLanding] = useState(false);
 
   const storedToken = () => localStorage.getItem('auth_token');
 
@@ -20,13 +22,20 @@ export function AuthProvider({ children }) {
     return () => axios.interceptors.request.eject(id);
   }, []);
 
-  // Verify stored token on mount
+  // On mount: if no stored token show the landing page, otherwise verify token
   useEffect(() => {
     const t = storedToken();
-    if (!t) { setLoading(false); return; }
+    if (!t) {
+      setShowLanding(true);
+      setLoading(false);
+      return;
+    }
     axios.get(`${API_BASE}/api/auth/me`)
       .then(r => setUser(r.data))
-      .catch(() => { localStorage.removeItem('auth_token'); })
+      .catch(() => {
+        localStorage.removeItem('auth_token');
+        setShowLanding(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -34,16 +43,26 @@ export function AuthProvider({ children }) {
     const r = await axios.post(`${API_BASE}/api/auth/login`, { username, password });
     localStorage.setItem('auth_token', r.data.token);
     setUser(r.data.user);
+    setShowLanding(false);
+    return r.data.user;
+  };
+
+  const loginAsGuest = async () => {
+    const r = await axios.post(`${API_BASE}/api/auth/guest`);
+    localStorage.setItem('auth_token', r.data.token);
+    setUser(r.data.user);
+    setShowLanding(false);
     return r.data.user;
   };
 
   const logout = () => {
     localStorage.removeItem('auth_token');
     setUser(null);
+    setShowLanding(true);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, showLanding, setShowLanding, login, loginAsGuest, logout }}>
       {children}
     </AuthContext.Provider>
   );

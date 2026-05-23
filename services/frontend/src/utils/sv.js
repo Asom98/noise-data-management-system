@@ -17,8 +17,6 @@ const sv = {
 
   // Header
   header: {
-    searchPlaceholder: 'Fråga AI om sensordata, bullernivåer eller få insikter...',
-    ask: 'Fråga',
     admin: 'Admin',
   },
 

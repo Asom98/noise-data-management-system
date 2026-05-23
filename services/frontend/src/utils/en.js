@@ -17,8 +17,6 @@ const en = {
 
   // Header
   header: {
-    searchPlaceholder: 'Ask AI about sensor data, noise levels or get insights...',
-    ask: 'Ask',
     admin: 'Admin',
   },
 

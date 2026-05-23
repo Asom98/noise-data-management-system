@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 # ─── Auth config ──────────────────────────────────────────────────────────────
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-JWT_SECRET   = os.getenv("JWT_SECRET", "malmo-noise-secret-2026")
+JWT_SECRET   = os.getenv("JWT_SECRET")
 JWT_ALG      = "HS256"
 JWT_EXPIRE_H = 24
 
@@ -65,7 +65,7 @@ def get_db():
         port=os.getenv("DB_PORT", "5432"),
         dbname=os.getenv("DB_NAME", "noise_db"),
         user=os.getenv("DB_USER", "noise_user"),
-        password=os.getenv("DB_PASSWORD", "noise_password")
+        password=os.getenv("DB_PASSWORD")
     )
 
 # ─── Startup: seed admin user ─────────────────────────────────────────────────
@@ -84,12 +84,15 @@ def seed_admin():
                 created_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
-        cur.execute("SELECT 1 FROM users WHERE username = %s", ('mårten',))
-        if not cur.fetchone():
-            cur.execute(
-                "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
-                ('mårten', hash_password('0046'), 'admin')
-            )
+        admin_user = os.getenv("ADMIN_USERNAME")
+        admin_pass = os.getenv("ADMIN_PASSWORD")
+        if admin_user and admin_pass:
+            cur.execute("SELECT 1 FROM users WHERE username = %s", (admin_user,))
+            if not cur.fetchone():
+                cur.execute(
+                    "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
+                    (admin_user, hash_password(admin_pass), 'admin')
+                )
         conn.commit()
         cur.close()
         conn.close()
